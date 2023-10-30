@@ -68,11 +68,13 @@ else
                 <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
                 <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
 
-                @foreach (var review in insertion.Reviews)
-                {
-                    <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
-                        style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
-                }
+                <span style="margin-left: 0.1em; margin-right: 0.1em">
+                    @foreach (var review in insertion.Reviews)
+                    {
+                        <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
+                            style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
+                    }
+                </span>
 
                 @insertion.SourceBranch
 
