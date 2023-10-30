@@ -25,7 +25,7 @@ else
         {
             <li>
                 <details>
-                    <summary><a href="@insertion.Url">@insertion.Title</a></summary>
+                    <summary>[@insertion.Status] <a href="@insertion.Url">@insertion.Title</a></summary>
 
                     <pre>@insertion.Json</pre>
                 </details>
@@ -64,5 +64,15 @@ else
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{node["pullRequestId"]}";
         public string Title => node["title"]!.ToString();
         public string Json => node.ToJsonString(new() { WriteIndented = true });
+        public PullRequestStatus Status => Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
+    }
+
+    enum PullRequestStatus
+    {
+        Abandoned,
+        Active,
+        All,
+        Completed,
+        NotSet
     }
 }
