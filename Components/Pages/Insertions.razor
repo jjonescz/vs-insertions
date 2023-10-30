@@ -33,6 +33,8 @@ else
         {
             <li>
                 <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
+                <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
+
                 <a href="@insertion.Url">@insertion.Title</a>
 
                 <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
@@ -121,6 +123,7 @@ else
         public string Title => node["title"]!.ToString();
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
+        public bool IsDraft => (bool)node["isDraft"]!;
         public Repo Repo =>
             Title.Contains("Roslyn") ? Repo.Roslyn
             : Title.Contains("Razor") ? Repo.Razor
@@ -161,6 +164,12 @@ else
         PullRequestStatus.Abandoned => "🔴", // red circle
         PullRequestStatus.Active => "🟡", // yellow circle
         PullRequestStatus.Completed => "🟢", // green circle
+    };
+
+    static string IsDraftToEmoji(bool isDraft) => isDraft switch
+    {
+        true => "🔘", // white circle
+        false => "⚫", // black circle
     };
 
     enum Repo
