@@ -56,7 +56,7 @@ else
                 <a href="@insertion.Url">@insertion.Title</a>
 
                 <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
-                <button @onclick="insertion.AbandonAsync" disabled="@(insertion.Status == PullRequestStatus.Abandoned)">Abandon</button>
+                <button @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
 
                 @if (insertion.Abandoning)
                 {
