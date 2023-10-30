@@ -31,14 +31,15 @@ else
         @foreach (var insertion in insertions[currentRepo])
         {
             <li>
-                <details>
-                    <summary>
-                        <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
-                        <a href="@insertion.Url">@insertion.Title</a>
-                    </summary>
+                <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
+                <a href="@insertion.Url">@insertion.Title</a>
 
+                <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
+
+                @if (insertion.DisplayJson)
+                {
                     <pre>@insertion.Json</pre>
-                </details>
+                }
             </li>
         }
     </ul>
@@ -72,6 +73,8 @@ else
 
     class VsInsertion(JsonNode node)
     {
+        public bool DisplayJson { get; set; }
+
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{node["pullRequestId"]}";
         public string Title => node["title"]!.ToString();
         public string Json => node.ToJsonString(new() { WriteIndented = true });
