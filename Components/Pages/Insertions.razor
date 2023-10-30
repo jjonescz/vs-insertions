@@ -21,7 +21,7 @@
 {
     <p>Please provide cookie (which your browser sends for <a href="@listUrl">this URL</a>) and hit "Start".</p>
 }
-else if (lookup == null)
+else if (insertions == null)
 {
     <p>Loading...</p>
 }
@@ -32,9 +32,23 @@ else
         <option value="@Repo.Roslyn">Roslyn</option>
         <option value="@Repo.Razor">Razor</option>
     </select>
-    <ol>
-        @foreach (var insertion in lookup[currentRepo])
+
+    <label>Target:</label>
+    <select @bind="currentTargetBranch">
+        @foreach (var branch in insertions.Select(x => x.TargetBranch).Distinct())
         {
+            <option value="@branch">@branch</option>
+        }
+    </select>
+
+    <ol>
+        @foreach (var insertion in insertions)
+        {
+            if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch)
+            {
+                continue;
+            }
+
             <li>
                 <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
                 <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
@@ -72,8 +86,8 @@ else
     private bool started;
     private bool loading;
     private Repo currentRepo;
+    private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
-    private ILookup<Repo, VsInsertion>? lookup;
 
     private async Task StartAsync()
     {
@@ -111,7 +125,6 @@ else
             {
                 insertions = insertions.Concat(moreInsertions).ToArray();
             }
-            lookup = insertions.ToLookup(x => x.Repo);
         }
         finally
         {
@@ -134,6 +147,7 @@ else
             Title.Contains("Roslyn") ? Repo.Roslyn
             : Title.Contains("Razor") ? Repo.Razor
             : throw new InvalidOperationException($"Unknown repo for {Title}");
+        public string TargetBranch => node["targetRefName"]!.ToString();
 
         public async Task AbandonAsync()
         {
