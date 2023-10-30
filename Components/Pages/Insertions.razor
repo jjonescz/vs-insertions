@@ -1,7 +1,9 @@
 ﻿@page "/"
 @using System.Text.Json.Nodes
 @using System.Text.Json
+@using System.Runtime.InteropServices
 @attribute [RenderModeInteractiveServer]
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Insertions</PageTitle>
 
@@ -9,7 +11,11 @@
 
 <div>
     <label>Cookie:</label>
-    <input type="text" @bind="cookie" />
+    <input type="text" @bind="cookie" placeholder="@(!browser ? "Checking storage..." : "")" />
+    <label>
+        <input type="checkbox" @bind="remember" />
+        Remember
+    </label>
     <button @onclick="StartAsync">Start</button>
     @if (loading)
     {
@@ -88,12 +94,24 @@ else
     private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&searchCriteria.status=all&api-version=6.0&$top=100";
 
     private HttpClient client = null!;
+    private bool browser;
     private string? cookie;
+    private bool remember = true;
     private bool started;
     private bool loading;
     private Repo currentRepo;
     private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            cookie = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "cookie");
+            browser = true;
+            StateHasChanged();
+        }
+    }
 
     private async Task StartAsync()
     {
@@ -104,6 +122,11 @@ else
 
         started = true;
         insertions = null;
+
+        if (remember)
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "cookie", cookie);
+        }
 
         client = new HttpClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
