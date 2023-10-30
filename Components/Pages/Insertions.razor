@@ -1,5 +1,6 @@
 ﻿@page "/insertions"
 @using System.Text.Json.Nodes
+@using System.Text.Json
 @attribute [RenderModeInteractiveServer]
 
 <PageTitle>Insertions</PageTitle>
@@ -35,6 +36,12 @@ else
                 <a href="@insertion.Url">@insertion.Title</a>
 
                 <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
+                <button @onclick="insertion.AbandonAsync" disabled="@(insertion.Status == PullRequestStatus.Abandoned)">Abandon</button>
+
+                @if (insertion.Abandoning)
+                {
+                    @: Abandoning...
+                }
 
                 @if (insertion.DisplayJson)
                 {
@@ -54,6 +61,7 @@ else
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
     private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&searchCriteria.status=all&api-version=6.0&$top=100";
 
+    private HttpClient client = null!;
     private string? cookie;
     private bool started;
     private bool loading;
@@ -70,6 +78,9 @@ else
 
         started = true;
 
+        client = new HttpClient();
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+
         await LoadMoreAsync();
     }
 
@@ -79,13 +90,9 @@ else
         try
         {
             var skip = insertions?.Length ?? 0;
-
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Cookie", cookie);
-
             var json = await client.GetStringAsync(listUrl + "&skip=" + skip);
             var node = JsonNode.Parse(json);
-            var moreInsertions = node!["value"]!.AsArray().Select(x => new VsInsertion(x!));
+            var moreInsertions = node!["value"]!.AsArray().Select(x => new VsInsertion(this, x!));
 
             if (insertions == null)
             {
@@ -103,18 +110,38 @@ else
         }
     }
 
-    class VsInsertion(JsonNode node)
+    class VsInsertion(Insertions page, JsonNode node)
     {
         public bool DisplayJson { get; set; }
+        public bool Abandoning { get; private set; }
 
-        public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{node["pullRequestId"]}";
+        public string PullRequestId => node["pullRequestId"]!.ToString();
+        public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
         public string Json => node.ToJsonString(new() { WriteIndented = true });
-        public PullRequestStatus Status => Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
+        public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public Repo Repo =>
             Title.Contains("Roslyn") ? Repo.Roslyn
             : Title.Contains("Razor") ? Repo.Razor
             : throw new InvalidOperationException($"Unknown repo for {Title}");
+
+        public async Task AbandonAsync()
+        {
+            Abandoning = true;
+            try
+            {
+                var response = await page.client.PatchAsJsonAsync(
+                    $"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}?api-version=7.0",
+                    new { status = "abandoned" });
+                Console.WriteLine(response);
+                Console.WriteLine(await response.Content.ReadAsStringAsync());
+                Status = PullRequestStatus.Abandoned;
+            }
+            finally
+            {
+                Abandoning = false;
+            }
+        }
     }
 
     enum PullRequestStatus
