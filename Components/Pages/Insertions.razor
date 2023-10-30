@@ -11,6 +11,10 @@
     <label>Cookie:</label>
     <input type="text" @bind="cookie" />
     <button @onclick="StartAsync">Start</button>
+    @if (loading)
+    {
+        @: Loading...
+    }
 </div>
 
 @if (!started)
@@ -93,7 +97,9 @@ else
         try
         {
             var skip = insertions?.Length ?? 0;
-            var json = await client.GetStringAsync(listUrl + "&skip=" + skip);
+            var url = listUrl + "&$skip=" + skip;
+            Console.WriteLine(url);
+            var json = await client.GetStringAsync(url);
             var node = JsonNode.Parse(json);
             var moreInsertions = node!["value"]!.AsArray().Select(x => new VsInsertion(this, x!));
 
