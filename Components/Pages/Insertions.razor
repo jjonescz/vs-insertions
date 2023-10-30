@@ -74,7 +74,9 @@ else
                         style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
                 }
 
-                <a href="@insertion.Url">@insertion.Title</a>
+                @insertion.SourceBranch
+
+                <a href="@insertion.Url" title="@insertion.Title">@insertion.BuildNumber</a>
 
                 <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
                 <button @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
@@ -187,6 +189,8 @@ else
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
         public string Repo => ParsedTitle.Groups["repo"].Value;
+        public string SourceBranch => ParsedTitle.Groups["source"].Value;
+        public string BuildNumber => ParsedTitle.Groups["build"].Value;
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
 
