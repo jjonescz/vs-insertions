@@ -2,6 +2,7 @@
 @using System.Text.Json.Nodes
 @using System.Text.Json
 @using System.Runtime.InteropServices
+@using System.Text.RegularExpressions
 @attribute [RenderModeInteractiveServer]
 @inject IJSRuntime JSRuntime
 
@@ -41,8 +42,10 @@ else
 {
     <label>Repo:</label>
     <select @bind="currentRepo">
-        <option value="@Repo.Roslyn">Roslyn</option>
-        <option value="@Repo.Razor">Razor</option>
+        @foreach (var repo in insertions.Select(x => x.Repo).Distinct())
+        {
+            <option value="@repo">@repo</option>
+        }
     </select>
 
     <label>Target:</label>
@@ -106,7 +109,7 @@ else
     private bool started;
     private bool loading;
     private StatusFilter statusFilter;
-    private Repo currentRepo;
+    private string currentRepo = "Roslyn";
     private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
 
@@ -171,19 +174,19 @@ else
 
     class VsInsertion(Insertions page, JsonNode node)
     {
+        private Match? parsedTitle;
+
         public bool DisplayJson { get; set; }
         public bool Abandoning { get; private set; }
 
         public string PullRequestId => node["pullRequestId"]!.ToString();
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
+        public Match ParsedTitle => (parsedTitle ??= Regex.Match(Title, @"(?<repo>\w+) '(?<source>[^']+)/(?<build>[\d.]+)' Insertion into (?<target>.*)"));
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
-        public Repo Repo =>
-            Title.Contains("Roslyn") ? Repo.Roslyn
-            : Title.Contains("Razor") ? Repo.Razor
-            : throw new InvalidOperationException($"Unknown repo for {Title}");
+        public string Repo => ParsedTitle.Groups["repo"].Value;
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
 
@@ -243,12 +246,6 @@ else
         true => "🔘", // white circle
         false => "⚫", // black circle
     };
-
-    enum Repo
-    {
-        Roslyn,
-        Razor
-    }
 
     enum Vote
     {
