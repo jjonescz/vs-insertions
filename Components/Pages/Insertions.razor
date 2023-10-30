@@ -6,9 +6,11 @@
 
 <h1>Insertions</h1>
 
-<label>Cookie:</label>
-<input type="text" @bind="cookie" />
-<button @onclick="StartAsync">Start</button>
+<div>
+    <label>Cookie:</label>
+    <input type="text" @bind="cookie" />
+    <button @onclick="StartAsync">Start</button>
+</div>
 
 @if (!started)
 {
@@ -20,8 +22,13 @@ else if (insertions == null)
 }
 else
 {
+    <label>Repo:</label>
+    <select @bind="currentRepo">
+        <option value="@Repo.Roslyn">Roslyn</option>
+        <option value="@Repo.Razor">Razor</option>
+    </select>
     <ul>
-        @foreach (var insertion in insertions)
+        @foreach (var insertion in insertions[currentRepo])
         {
             <li>
                 <details>
@@ -43,7 +50,8 @@ else
 
     private string? cookie;
     private bool started;
-    private VsInsertion[]? insertions;
+    private Repo currentRepo;
+    private ILookup<Repo, VsInsertion>? insertions;
 
     private async Task StartAsync()
     {
@@ -59,7 +67,7 @@ else
 
         var json = await client.GetStringAsync(listUrl);
         var node = JsonNode.Parse(json);
-        insertions = node!["value"]!.AsArray().Select(x => new VsInsertion(x!)).ToArray();
+        insertions = node!["value"]!.AsArray().Select(x => new VsInsertion(x!)).ToLookup(x => x.Repo);
     }
 
     class VsInsertion(JsonNode node)
@@ -68,6 +76,10 @@ else
         public string Title => node["title"]!.ToString();
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status => Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
+        public Repo Repo =>
+            Title.Contains("Roslyn") ? Repo.Roslyn
+            : Title.Contains("Razor") ? Repo.Razor
+            : throw new InvalidOperationException($"Unknown repo for {Title}");
     }
 
     enum PullRequestStatus
@@ -83,4 +95,10 @@ else
         PullRequestStatus.Active => "🟡", // yellow circle
         PullRequestStatus.Completed => "🟢", // green circle
     };
+
+    enum Repo
+    {
+        Roslyn,
+        Razor
+    }
 }
