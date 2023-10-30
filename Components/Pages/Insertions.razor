@@ -88,6 +88,16 @@ else
                     @: Abandoning...
                 }
 
+                @if (!insertion.RpsSummary.Loaded)
+                {
+                    @: Loading RPS...
+                }
+                else
+                {
+                    @: DDRIT: @RpsRunToString(insertion.RpsSummary.Ddrit),
+                    @: Speedometer: @RpsRunToString(insertion.RpsSummary.Ddrit)
+                }
+
                 @if (insertion.DisplayJson)
                 {
                     <pre>@insertion.Json</pre>
@@ -178,6 +188,7 @@ else
 
     class VsInsertion(Insertions page, JsonNode node)
     {
+        private RpsSummary? rpsSummary;
         private Match? parsedTitle;
 
         public bool DisplayJson { get; set; }
@@ -195,6 +206,19 @@ else
         public string BuildNumber => ParsedTitle.Groups["build"].Value;
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
+        public RpsSummary RpsSummary
+        {
+            get
+            {
+                if (rpsSummary == null)
+                {
+                    rpsSummary = new RpsSummary();
+                    LoadRpsSummary(rpsSummary);
+                }
+
+                return rpsSummary;
+            }
+        }
 
         public async Task AbandonAsync()
         {
@@ -217,6 +241,55 @@ else
                 Abandoning = false;
             }
         }
+
+        private async void LoadRpsSummary(RpsSummary rpsSummary)
+        {
+            try
+            {
+                var json = await page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
+                var node = JsonNode.Parse(json);
+                var threads = node!["value"]!.AsArray();
+                rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
+                rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer");
+                rpsSummary.Loaded = true;
+                page.StateHasChanged();
+            }
+            catch { }
+
+            static RpsRun? getRunResults(JsonArray threads, string text)
+            {
+                var latestThread = threads.Where(x => x!["comments"]!.AsArray().Any(x => x!["content"]?.ToString().Contains(text) ?? false)).LastOrDefault();
+                if (latestThread == null)
+                {
+                    return null;
+                }
+
+                var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() == "VSEng Perf Automation Account").LastOrDefault();
+                if (latestComment == null)
+                {
+                    return new RpsRun(InProgress: true, Regressions: 0, BrokenTests: 0);
+                }
+
+                var latestText = latestComment["content"]!.ToString();
+                if (latestText.Contains("Test Run **PASSED**"))
+                {
+                    return new RpsRun(InProgress: false, Regressions: 0, BrokenTests: 0);
+                }
+
+                return new RpsRun(InProgress: false, Regressions: tryGetCount(latestText, "regression"), BrokenTests: tryGetCount(latestText, "broken test"));
+            }
+
+            static int tryGetCount(string text, string label)
+            {
+                var match = Regex.Match(text, @$"(\d+) {label}");
+                if (!match.Success || !int.TryParse(match.Groups[1].Value, out var result))
+                {
+                    return -1;
+                }
+
+                return result;
+            }
+        }
     }
 
     class Review(JsonNode node)
@@ -224,6 +297,35 @@ else
         public string DisplayName => node["displayName"]!.ToString();
         public string ImageUrl => node["imageUrl"]!.ToString();
         public Vote Vote => (Vote)(int)node["vote"]!;
+    }
+
+    class RpsSummary
+    {
+        public bool Loaded { get; set; }
+        public RpsRun? Ddrit { get; set; }
+        public RpsRun? Speedometer { get; set; }
+    }
+
+    record RpsRun(bool InProgress, int Regressions, int BrokenTests);
+
+    static string RpsRunToString(RpsRun? run)
+    {
+        if (run == null)
+        {
+            return "?";
+        }
+
+        if (run.InProgress)
+        {
+            return "...";
+        }
+
+        if (run.BrokenTests != 0)
+        {
+            return $"{run.Regressions}+{run.BrokenTests}";
+        }
+
+        return $"{run.Regressions}";
     }
 
     enum PullRequestStatus
