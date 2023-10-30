@@ -135,7 +135,11 @@ else
                     new { status = "abandoned" });
                 Console.WriteLine(response);
                 Console.WriteLine(await response.Content.ReadAsStringAsync());
-                Status = PullRequestStatus.Abandoned;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Status = PullRequestStatus.Abandoned;
+                }
             }
             finally
             {
