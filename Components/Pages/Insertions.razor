@@ -16,6 +16,12 @@
         <input type="checkbox" @bind="remember" />
         Remember
     </label>
+    
+    <select @bind="statusFilter">
+        <option value="@StatusFilter.All">All</option>
+        <option value="@StatusFilter.Active">Only active</option>
+    </select>
+
     <button @onclick="StartAsync">Start</button>
     @if (loading)
     {
@@ -91,7 +97,7 @@ else
 
 @code {
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
-    private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&searchCriteria.status=all&api-version=6.0&$top=100";
+    private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&api-version=6.0";
 
     private HttpClient client = null!;
     private bool browser;
@@ -99,6 +105,7 @@ else
     private bool remember = true;
     private bool started;
     private bool loading;
+    private StatusFilter statusFilter;
     private Repo currentRepo;
     private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
@@ -140,7 +147,7 @@ else
         try
         {
             var skip = insertions?.Length ?? 0;
-            var url = listUrl + "&$skip=" + skip;
+            var url = listUrl + "&searchCriteria.status=" + statusFilter.ToString().ToLowerInvariant() + "&$top=100&$skip=" + skip;
             Console.WriteLine(url);
             var json = await client.GetStringAsync(url);
             Console.WriteLine("Loaded");
@@ -215,6 +222,12 @@ else
         Abandoned,
         Active,
         Completed
+    }
+
+    enum StatusFilter
+    {
+        All,
+        Active
     }
 
     static string StatusToEmoji(PullRequestStatus status) => status switch
