@@ -53,6 +53,12 @@ else
                 <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
                 <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
 
+                @foreach (var review in insertion.Reviews)
+                {
+                    <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
+                        style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
+                }
+
                 <a href="@insertion.Url">@insertion.Title</a>
 
                 <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
@@ -114,6 +120,7 @@ else
             var url = listUrl + "&$skip=" + skip;
             Console.WriteLine(url);
             var json = await client.GetStringAsync(url);
+            Console.WriteLine("Loaded");
             var node = JsonNode.Parse(json);
             var moreInsertions = node!["value"]!.AsArray().Select(x => new VsInsertion(this, x!));
 
@@ -148,6 +155,7 @@ else
             : Title.Contains("Razor") ? Repo.Razor
             : throw new InvalidOperationException($"Unknown repo for {Title}");
         public string TargetBranch => node["targetRefName"]!.ToString();
+        public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
 
         public async Task AbandonAsync()
         {
@@ -172,6 +180,13 @@ else
         }
     }
 
+    class Review(JsonNode node)
+    {
+        public string DisplayName => node["displayName"]!.ToString();
+        public string ImageUrl => node["imageUrl"]!.ToString();
+        public Vote Vote => (Vote)(int)node["vote"]!;
+    }
+
     enum PullRequestStatus
     {
         Abandoned,
@@ -184,6 +199,7 @@ else
         PullRequestStatus.Abandoned => "🔴", // red circle
         PullRequestStatus.Active => "🟡", // yellow circle
         PullRequestStatus.Completed => "🟢", // green circle
+        _ => "?",
     };
 
     static string IsDraftToEmoji(bool isDraft) => isDraft switch
@@ -197,4 +213,21 @@ else
         Roslyn,
         Razor
     }
+
+    enum Vote
+    {
+        Approved = 10,
+        ApprovedWithSuggestions = 5,
+        NoVote = 0,
+        WaitingForAuthor = -5,
+        Rejected = -10,
+    }
+
+    static string VoteToColor(Vote vote) => vote switch
+    {
+        Vote.Approved => "green",
+        Vote.Rejected => "red",
+        Vote.NoVote => "lightgray",
+        _ => "yellow",
+    };
 }
