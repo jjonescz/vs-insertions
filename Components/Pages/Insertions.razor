@@ -31,7 +31,7 @@ else
 }
 
 @code {
-    private const string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&searchCriteria.status=active&api-version=6.0";
+    private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&searchCriteria.status=all&api-version=6.0";
     private string? cookie;
     private bool started;
     private VsInsertion[]? insertions;
