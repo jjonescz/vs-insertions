@@ -25,7 +25,10 @@ else
         {
             <li>
                 <details>
-                    <summary>[@insertion.Status] <a href="@insertion.Url">@insertion.Title</a></summary>
+                    <summary>
+                        <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
+                        <a href="@insertion.Url">@insertion.Title</a>
+                    </summary>
 
                     <pre>@insertion.Json</pre>
                 </details>
@@ -71,8 +74,13 @@ else
     {
         Abandoned,
         Active,
-        All,
-        Completed,
-        NotSet
+        Completed
     }
+
+    static string StatusToEmoji(PullRequestStatus status) => status switch
+    {
+        PullRequestStatus.Abandoned => "🔴", // red circle
+        PullRequestStatus.Active => "🟡", // yellow circle
+        PullRequestStatus.Completed => "🟢", // green circle
+    };
 }
