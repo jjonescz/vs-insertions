@@ -95,8 +95,11 @@ else
                 else
                 {
                     @: DDRIT: @RpsRunToString(insertion.RpsSummary.Ddrit),
-                    @: Speedometer: @RpsRunToString(insertion.RpsSummary.Ddrit)
+                    @: Speedometer: @RpsRunToString(insertion.RpsSummary.Speedometer)
+                    @(" ")
                 }
+
+                <button @onclick="insertion.RefreshRpsSummary">Refresh</button>
 
                 @if (insertion.DisplayJson)
                 {
@@ -242,6 +245,12 @@ else
             }
         }
 
+        public void RefreshRpsSummary()
+        {
+            rpsSummary = new RpsSummary();
+            LoadRpsSummary(rpsSummary);
+        }
+
         private async void LoadRpsSummary(RpsSummary rpsSummary)
         {
             try
@@ -310,14 +319,9 @@ else
 
     static string RpsRunToString(RpsRun? run)
     {
-        if (run == null)
+        if (run == null || run.InProgress || (run.Regressions == -1 && run.BrokenTests == -1))
         {
             return "?";
-        }
-
-        if (run.InProgress)
-        {
-            return "...";
         }
 
         if (run.BrokenTests != 0)
