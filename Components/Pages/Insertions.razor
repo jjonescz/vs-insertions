@@ -324,12 +324,17 @@ else
             return "?";
         }
 
-        if (run.BrokenTests != 0)
+        if (run.BrokenTests is not (0 or -1))
         {
-            return $"{run.Regressions}+{run.BrokenTests}";
+            return $"{numberToString(run.Regressions)}+{run.BrokenTests}";
         }
 
-        return $"{run.Regressions}";
+        return numberToString(run.Regressions);
+
+        static string numberToString(int num)
+        {
+            return num == -1 ? "?" : $"{num}";
+        }
     }
 
     enum PullRequestStatus
