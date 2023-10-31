@@ -12,18 +12,20 @@
 
 <div>
     <label>Cookie:</label>
-    <input type="text" @bind="cookie" placeholder="@(!browser ? "Checking storage..." : "")" />
-    <label>
-        <input type="checkbox" @bind="remember" />
+    <input type="text" class="form-control d-inline-block w-auto" @bind="cookie" placeholder="@(!browser ? "Checking storage..." : "")" />
+    <label title="Remember Cookie value you entered in local browser storage">
+        <input type="checkbox" class="form-check-input" @bind="remember" />
         Remember
     </label>
-    
-    <select @bind="statusFilter">
+</div>
+
+<div class="my-2">
+    <select class="form-select d-inline-block w-auto" @bind="statusFilter">
         <option value="@StatusFilter.All">All</option>
         <option value="@StatusFilter.Active">Only active</option>
     </select>
 
-    <button @onclick="StartAsync">Start</button>
+    <button class="btn btn-primary" @onclick="StartAsync">Start</button>
     @if (loading)
     {
         @: Loading...
@@ -32,7 +34,7 @@
 
 @if (!started)
 {
-    <p>Please provide cookie (which your browser sends for <a href="@listUrl">this URL</a>) and hit "Start".</p>
+    <p>Please provide value of the Cookie header (which your browser sends for <a href="@listUrl">this URL</a>) and hit "Start".</p>
 }
 else if (insertions == null)
 {
@@ -41,7 +43,7 @@ else if (insertions == null)
 else
 {
     <label>Repo:</label>
-    <select @bind="currentRepo">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo">
         @foreach (var repo in insertions.Select(x => x.Repo).Distinct())
         {
             <option value="@repo">@repo</option>
@@ -49,14 +51,14 @@ else
     </select>
 
     <label>Target:</label>
-    <select @bind="currentTargetBranch">
+    <select class="form-select d-inline-block w-auto" @bind="currentTargetBranch">
         @foreach (var branch in insertions.Select(x => x.TargetBranch).Distinct())
         {
             <option value="@branch">@branch</option>
         }
     </select>
 
-    <ol>
+    <ol class="mt-2">
         @foreach (var insertion in insertions)
         {
             if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch)
@@ -80,8 +82,8 @@ else
 
                 <a href="@insertion.Url" title="@insertion.Title">@insertion.BuildNumber</a>
 
-                <button @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
-                <button @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
+                <button class="btn btn-outline-danger btn-sm" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
 
                 @if (insertion.Abandoning)
                 {
@@ -99,7 +101,7 @@ else
                     @(" ")
                 }
 
-                <button @onclick="insertion.RefreshRpsSummary">Refresh</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary">Refresh</button>
 
                 @if (insertion.DisplayJson)
                 {
