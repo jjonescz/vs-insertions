@@ -263,7 +263,12 @@ else
                 rpsSummary.Loaded = true;
                 page.StateHasChanged();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                rpsSummary.Loaded = true;
+                page.StateHasChanged();
+            }
 
             static RpsRun? getRunResults(JsonArray threads, string text)
             {
