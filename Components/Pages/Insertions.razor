@@ -90,7 +90,11 @@ else
                     @: Abandoning...
                 }
 
-                @if (!insertion.RpsSummary.Loaded)
+                @if (insertion.RpsSummary is null)
+                {
+                    @: RPS not loaded
+                }
+                else if (!insertion.RpsSummary.Loaded)
                 {
                     @: Loading RPS...
                 }
@@ -101,7 +105,7 @@ else
                     @(" ")
                 }
 
-                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary">Refresh</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary">Refresh RPS</button>
 
                 @if (insertion.DisplayJson)
                 {
@@ -195,7 +199,6 @@ else
 
     class VsInsertion(Insertions page, JsonNode node)
     {
-        private RpsSummary? rpsSummary;
         private Match? parsedTitle;
 
         public bool DisplayJson { get; set; }
@@ -213,19 +216,7 @@ else
         public string BuildNumber => ParsedTitle.Groups["build"].Value;
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
-        public RpsSummary RpsSummary
-        {
-            get
-            {
-                if (rpsSummary == null)
-                {
-                    rpsSummary = new RpsSummary();
-                    LoadRpsSummary(rpsSummary);
-                }
-
-                return rpsSummary;
-            }
-        }
+        public RpsSummary? RpsSummary { get; private set; }
 
         public async Task AbandonAsync()
         {
@@ -251,8 +242,9 @@ else
 
         public void RefreshRpsSummary()
         {
-            rpsSummary = new RpsSummary();
-            LoadRpsSummary(rpsSummary);
+            RpsSummary = new RpsSummary();
+            page.StateHasChanged();
+            LoadRpsSummary(RpsSummary);
         }
 
         private async void LoadRpsSummary(RpsSummary rpsSummary)
