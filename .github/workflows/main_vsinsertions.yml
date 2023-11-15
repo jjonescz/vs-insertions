@@ -21,11 +21,8 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
-
-      - name: dotnet publish
-        run: dotnet publish -c Release -o out
+      - name: Publish the app
+        run: dotnet publish -c Release --self-contained -o out
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
