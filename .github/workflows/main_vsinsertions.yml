@@ -22,7 +22,7 @@ jobs:
           global-json-file: global.json
 
       - name: Publish the app
-        run: dotnet publish -c Release --self-contained -o out
+        run: dotnet publish -c Release --self-contained -r win-x86 -o out
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
