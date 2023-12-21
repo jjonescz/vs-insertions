@@ -268,6 +268,7 @@ else
             Abandoning = true;
             try
             {
+                // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-request?view=azure-devops-rest-7.0&tabs=HTTP
                 var response = await page.client.PatchAsJsonAsync(
                     $"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}?api-version=7.0",
                     new { status = "abandoned" });
@@ -296,6 +297,7 @@ else
         {
             try
             {
+                // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-7.0&tabs=HTTP
                 var json = await page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
                 var node = JsonNode.Parse(json);
                 var threads = node!["value"]!.AsArray();
