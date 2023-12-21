@@ -13,7 +13,12 @@
 
 <h1>Insertions</h1>
 
-@{
+@if (!browser)
+{
+    <em>Checking storage...</em>
+}
+else if (string.IsNullOrEmpty(AccessToken))
+{
     var config = Configuration.GetSection("AzureDevOpsOAuth");
     var authorizeUrl = new UriBuilder("https://app.vssps.visualstudio.com/oauth2/authorize");
     var query = HttpUtility.ParseQueryString(string.Empty);
@@ -22,38 +27,37 @@
     query.Add("scope", "vso.code vso.threads_full");
     query.Add("redirect_uri", NavigationManager.ToAbsoluteUri("/oauth/callback").ToString());
     authorizeUrl.Query = query.ToString();
+
+    <a href="@authorizeUrl">Authorize</a>
 }
+else
+{
+    <div>
+        <label title="Remember authorization token in local browser storage">
+            <input type="checkbox" class="form-check-input" @bind="remember" />
+            Remember me
+        </label>
+    </div>
 
-<a href="@authorizeUrl">Authorize</a>
+    <div class="my-2">
+        <select class="form-select d-inline-block w-auto" @bind="statusFilter">
+            <option value="@StatusFilter.All">All</option>
+            <option value="@StatusFilter.Active">Only active</option>
+        </select>
 
-<div>
-    <label>Cookie:</label>
-    <input type="text" class="form-control d-inline-block w-auto" @bind="cookie" placeholder="@(!browser ? "Checking storage..." : "")" />
-    <label title="Remember Cookie value you entered in local browser storage">
-        <input type="checkbox" class="form-check-input" @bind="remember" />
-        Remember
-    </label>
-</div>
-
-<div class="my-2">
-    <select class="form-select d-inline-block w-auto" @bind="statusFilter">
-        <option value="@StatusFilter.All">All</option>
-        <option value="@StatusFilter.Active">Only active</option>
-    </select>
-
-    <button class="btn btn-primary me-2" @onclick="StartAsync">Start</button>
-    @if (loading)
-    {
-        @: Loading...
-    }
-</div>
+        <button class="btn btn-primary me-2" @onclick="StartAsync">Start</button>
+        @if (loading)
+        {
+            @: Loading...
+        }
+    </div>
+}
 
 @if (!started || errorHtml != null)
 {
-    <p>Please provide value of the Cookie header which your browser sends for <a href="@listUrl">this URL</a> (open Developer Tools in your browser, visit the URL, expand the request in Network tab, look for Cookie in Request Headers, copy its value and paste it into the text box above) and then hit "Start".</p>
     if (errorHtml != null)
     {
-        <p>⚠️ An error occurred. You may need to refresh the Cookie header. This is the HTML response returned:</p>
+        <p>⚠️ An error occurred. You may need to re-authorize the app. This is the HTML response returned:</p>
         <iframe srcdoc="@errorHtml"></iframe>
     }
 }
@@ -154,7 +158,6 @@ else
 
     private HttpClient client = null!;
     private bool browser;
-    private string? cookie;
     private bool remember = true;
     private bool started;
     private bool loading;
@@ -164,11 +167,13 @@ else
     private VsInsertion[]? insertions;
     private string? errorHtml;
 
+    [Parameter, SupplyParameterFromQuery(Name = "token")] public string? AccessToken { get; set; }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            cookie = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "cookie");
+            AccessToken = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "token");
             browser = true;
             StateHasChanged();
         }
@@ -176,7 +181,7 @@ else
 
     private async Task StartAsync()
     {
-        if (string.IsNullOrEmpty(cookie))
+        if (string.IsNullOrEmpty(AccessToken))
         {
             return;
         }
@@ -188,11 +193,11 @@ else
 
         if (remember)
         {
-            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "cookie", cookie);
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "token", AccessToken);
         }
 
         client = new HttpClient();
-        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AccessToken}");
 
         await LoadMoreAsync();
     }
