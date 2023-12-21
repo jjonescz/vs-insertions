@@ -3,12 +3,28 @@
 @using System.Text.Json
 @using System.Runtime.InteropServices
 @using System.Text.RegularExpressions
+@using System.Web
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
+@inject NavigationManager NavigationManager
 
 <PageTitle>Insertions</PageTitle>
 
 <h1>Insertions</h1>
+
+@{
+    var config = Configuration.GetSection("AzureDevOpsOAuth");
+    var authorizeUrl = new UriBuilder("https://app.vssps.visualstudio.com/oauth2/authorize");
+    var query = HttpUtility.ParseQueryString(string.Empty);
+    query.Add("client_id", config.GetValue<string>("AppId"));
+    query.Add("response_type", "Assertion");
+    query.Add("scope", "vso.code vso.threads_full");
+    query.Add("redirect_uri", NavigationManager.ToAbsoluteUri("/oauth/callback").ToString());
+    authorizeUrl.Query = query.ToString();
+}
+
+<a href="@authorizeUrl">Authorize</a>
 
 <div>
     <label>Cookie:</label>
