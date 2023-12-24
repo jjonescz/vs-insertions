@@ -16,7 +16,12 @@
 
 <h1>Insertions</h1>
 
-@{
+@if (!browser)
+{
+    <em>Checking access token...</em>
+}
+else
+{
     var config = Configuration.GetSection("AzureDevOpsOAuth");
     // https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/azure-devops-oauth?view=azure-devops#2-authorize-your-app
     var authorizeUrl = new UriBuilder("https://app.vssps.visualstudio.com/oauth2/authorize");
@@ -27,29 +32,25 @@
     query.Add("redirect_uri", NavigationManager.ToAbsoluteUri("/oauth/callback").ToString());
     authorizeUrl.Query = query.ToString();
 
-    <a href="@authorizeUrl" class="me-2">Authorize</a>
+    <a href="@authorizeUrl" class="me-2">@(string.IsNullOrEmpty(accessToken) ? "Authorize" : "Re-authorize")</a>
     <a href="https://app.vsaex.visualstudio.com/me" class="me-2"
         title="You can revoke this app's access there">Manage your authorizations</a>
-}
 
-@if (!browser)
-{
-    <em>Checking access token...</em>
-}
-else if (!string.IsNullOrEmpty(accessToken))
-{
-    <div class="my-2">
-        <select class="form-select d-inline-block w-auto" @bind="statusFilter">
-            <option value="@StatusFilter.All">All</option>
-            <option value="@StatusFilter.Active">Only active</option>
-        </select>
+    if (!string.IsNullOrEmpty(accessToken))
+    {
+        <div class="my-2">
+            <select class="form-select d-inline-block w-auto" @bind="statusFilter">
+                <option value="@StatusFilter.All">All</option>
+                <option value="@StatusFilter.Active">Only active</option>
+            </select>
 
-        <button class="btn btn-primary me-2" @onclick="StartAsync">Start</button>
-        @if (loading)
-        {
-            @: Loading...
-        }
-    </div>
+            <button class="btn btn-primary me-2" @onclick="StartAsync">Start</button>
+            @if (loading)
+            {
+                @: Loading...
+            }
+        </div>
+    }
 }
 
 @if (!started || errorHtml != null)

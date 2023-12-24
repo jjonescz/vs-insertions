@@ -49,7 +49,9 @@ app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfigur
     {
         HttpOnly = true,
         Secure = true,
-        SameSite = SameSiteMode.Strict
+        SameSite = SameSiteMode.Strict,
+        // CONSIDER: Store also the refresh token and use it instead of this.
+        Expires = DateTimeOffset.UtcNow.AddSeconds(int.Parse(json["expires_in"]!.ToString()))
     });
 
     return Results.LocalRedirect("/");
