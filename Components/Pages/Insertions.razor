@@ -18,6 +18,7 @@
 
 @{
     var config = Configuration.GetSection("AzureDevOpsOAuth");
+    // https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/azure-devops-oauth?view=azure-devops#2-authorize-your-app
     var authorizeUrl = new UriBuilder("https://app.vssps.visualstudio.com/oauth2/authorize");
     var query = HttpUtility.ParseQueryString(string.Empty);
     query.Add("client_id", config.GetValue<string>("AppId"));

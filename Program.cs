@@ -27,6 +27,7 @@ app.UseAntiforgery();
 app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfiguration configuration, IDataProtectionProvider dataProtectionProvider) =>
 {
     // Authorize app.
+    // https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/azure-devops-oauth?view=azure-devops#3-get-an-access-and-refresh-token-for-the-user
     var config = configuration.GetSection("AzureDevOpsOAuth");
     var client = new HttpClient();
     var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", new FormUrlEncodedContent([
