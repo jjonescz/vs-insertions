@@ -1,4 +1,5 @@
 ﻿@page "/"
+@using Microsoft.AspNetCore.DataProtection
 @using System.Text.Json.Nodes
 @using System.Text.Json
 @using System.Runtime.InteropServices
@@ -8,17 +9,14 @@
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
+@inject IHttpContextAccessor ContextAccessor
+@inject IDataProtectionProvider DataProtectionProvider
 
 <PageTitle>Insertions</PageTitle>
 
 <h1>Insertions</h1>
 
-@if (!browser)
-{
-    <em>Checking storage...</em>
-}
-else if (string.IsNullOrEmpty(AccessToken))
-{
+@{
     var config = Configuration.GetSection("AzureDevOpsOAuth");
     var authorizeUrl = new UriBuilder("https://app.vssps.visualstudio.com/oauth2/authorize");
     var query = HttpUtility.ParseQueryString(string.Empty);
@@ -28,17 +26,15 @@ else if (string.IsNullOrEmpty(AccessToken))
     query.Add("redirect_uri", NavigationManager.ToAbsoluteUri("/oauth/callback").ToString());
     authorizeUrl.Query = query.ToString();
 
-    <a href="@authorizeUrl">Authorize</a>
+    <a href="@authorizeUrl" class="me-2">Authorize</a>
 }
-else
-{
-    <div>
-        <label title="Remember authorization token in local browser storage">
-            <input type="checkbox" class="form-check-input" @bind="remember" />
-            Remember me
-        </label>
-    </div>
 
+@if (!browser)
+{
+    <em>Checking access token...</em>
+}
+else if (!string.IsNullOrEmpty(accessToken))
+{
     <div class="my-2">
         <select class="form-select d-inline-block w-auto" @bind="statusFilter">
             <option value="@StatusFilter.All">All</option>
@@ -156,9 +152,9 @@ else
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
     private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&api-version=6.0";
 
-    private HttpClient client = null!;
+    private string? accessToken;
+    private HttpClient client = new HttpClient();
     private bool browser;
-    private bool remember = true;
     private bool started;
     private bool loading;
     private StatusFilter statusFilter;
@@ -167,21 +163,23 @@ else
     private VsInsertion[]? insertions;
     private string? errorHtml;
 
-    [Parameter, SupplyParameterFromQuery(Name = "token")] public string? AccessToken { get; set; }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            AccessToken = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "token");
+            var encryptedAccessToken = ContextAccessor.HttpContext?.Request.Cookies["access_token"];
+            accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
+                DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
             browser = true;
             StateHasChanged();
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task StartAsync()
     {
-        if (string.IsNullOrEmpty(AccessToken))
+        if (string.IsNullOrEmpty(accessToken))
         {
             return;
         }
@@ -191,13 +189,7 @@ else
         errorHtml = null;
         StateHasChanged();
 
-        if (remember)
-        {
-            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "token", AccessToken);
-        }
-
-        client = new HttpClient();
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AccessToken}");
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
 
         await LoadMoreAsync();
     }

@@ -1,5 +1,5 @@
+using Microsoft.AspNetCore.DataProtection;
 using System.Text.Json.Nodes;
-using System.Web;
 using VsInsertions.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
@@ -23,7 +24,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfiguration configuration) =>
+app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfiguration configuration, IDataProtectionProvider dataProtectionProvider) =>
 {
     // Authorize app.
     var config = configuration.GetSection("AzureDevOpsOAuth");
@@ -36,8 +37,21 @@ app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfigur
         new("redirect_uri", $"{context.Request.Scheme}://{context.Request.Host}/oauth/callback")]));
     var str = await response.Content.ReadAsStringAsync();
     var json = JsonNode.Parse(str)!;
+    var accessToken = json["access_token"]!.ToString();
 
-    return Results.LocalRedirect("/?token=" + HttpUtility.UrlEncode(json["access_token"]!.ToString()));
+    // Encrypt access token.
+    var protector = dataProtectionProvider.CreateProtector("access_token");
+    var encryptedAccessToken = protector.Protect(accessToken);
+
+    // Store access token in cookie.
+    context.Response.Cookies.Append("access_token", encryptedAccessToken, new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict
+    });
+
+    return Results.LocalRedirect("/");
 });
 
 app.MapRazorComponents<App>()
