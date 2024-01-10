@@ -47,7 +47,7 @@ app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfigur
     // Store access token in cookie.
     context.Response.Cookies.Append("access_token", encryptedAccessToken, new CookieOptions
     {
-        HttpOnly = true,
+        HttpOnly = false,
         Secure = true,
         SameSite = SameSiteMode.Strict,
         // CONSIDER: Store also the refresh token and use it instead of this.

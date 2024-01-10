@@ -150,6 +150,20 @@ else
     <p></p>
 }
 
+<script>
+    function getAccessTokenCookie() {
+        const name = "access_token=";
+        const decodedCookie = decodeURIComponent(document.cookie);
+        const cookies = decodedCookie.split(';');
+        for (const cookie of cookies) {
+            if (cookie.trim().startsWith(name)) {
+                return cookie.substring(name.length);
+            }
+        }
+        return "";
+    }
+</script>
+
 @code {
     private static readonly int numberOfRecentRpsToLoad = 10;
 
@@ -167,18 +181,16 @@ else
     private VsInsertion[]? insertions;
     private string? errorHtml;
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            var encryptedAccessToken = ContextAccessor.HttpContext?.Request.Cookies["access_token"];
+            var encryptedAccessToken = await JSRuntime.InvokeAsync<string>("getAccessTokenCookie");
             accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
                 DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
             browser = true;
             StateHasChanged();
         }
-
-        return Task.CompletedTask;
     }
 
     private async Task StartAsync()
