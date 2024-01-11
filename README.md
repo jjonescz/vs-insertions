@@ -9,7 +9,7 @@ What you are going to need to deploy this app yourself.
 ### Azure DevOps OAuth app
 
 1. Go to <https://app.vsaex.visualstudio.com/app/register>.
-1. Select scopes "Code (read)" (`vso.code`), "PR threads" (`vso.threads_full`).
+1. Select scopes "Code (read and write)" (`vso.code_write`), "PR threads" (`vso.threads_full`).
 1. Set callback URL to `https://<your-web-app-name>.azurewebsites.net/oauth/callback`.
    During development, set the callback URL to `https://localhost:7200/oauth/callback`.
 1. Make sure the following config is available to the app:
