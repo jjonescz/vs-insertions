@@ -45,6 +45,19 @@ else
             </select>
 
             <button class="btn btn-primary me-2" @onclick="StartAsync">Start</button>
+            
+            <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
+                title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
+                @if (!editMode)
+                {
+                    @:Edit mode
+                }
+                else
+                {
+                    @:Readonly mode
+                }
+            </button>
+
             @if (loading)
             {
                 @: Loading...
@@ -93,7 +106,7 @@ else
                 continue;
             }
 
-            <li>
+            <li value="@insertion.PullRequestId">
                 <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
                 <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
 
@@ -105,12 +118,15 @@ else
                     }
                 </span>
 
-                @insertion.SourceBranch
+                <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
 
                 <a href="@insertion.Url" title="@insertion.Title">@insertion.BuildNumber</a>
 
                 <button class="btn btn-outline-secondary btn-sm" @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
-                <button class="btn btn-outline-danger btn-sm" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
+                @if (editMode)
+                {
+                    <button class="btn btn-outline-danger btn-sm ms-1" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
+                }
 
                 @if (insertion.Abandoning)
                 {
@@ -175,6 +191,7 @@ else
     private bool browser;
     private bool started;
     private bool loading;
+    private bool editMode;
     private StatusFilter statusFilter;
     private string currentRepo = "Roslyn";
     private string currentTargetBranch = "refs/heads/main";
