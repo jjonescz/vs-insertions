@@ -93,7 +93,7 @@ else
                 continue;
             }
 
-            <li>
+            <li value="@insertion.PullRequestId">
                 <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
                 <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
 
@@ -105,7 +105,7 @@ else
                     }
                 </span>
 
-                @insertion.SourceBranch
+                <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
 
                 <a href="@insertion.Url" title="@insertion.Title">@insertion.BuildNumber</a>
 
