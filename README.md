@@ -2,6 +2,12 @@
 
 VS insertions dashboard for use by Roslyn and Razor teams.
 
+## Development
+
+```ps1
+dotnet watch -lp https
+```
+
 ## Deployment
 
 What you are going to need to deploy this app yourself.
@@ -25,7 +31,7 @@ What you are going to need to deploy this app yourself.
    ```
 
    For example,
-   - do nothing during development, then secrets of a testing OAuth app will be used from `appsettings.Development.json`,
+   - do nothing during development, then secrets of a testing OAuth app will be used from `appsettings.Development.json` (note that the OAuth app expects the port 7200 which is configured in the `https` launch profile),
    - use [Secret Manager](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets) during development,
    - configure environment variables on your server like:
 
