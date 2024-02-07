@@ -224,6 +224,7 @@ else
         errorHtml = null;
         StateHasChanged();
 
+        client.DefaultRequestHeaders.Remove("Authorization");
         client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
 
         await LoadMoreAsync();
