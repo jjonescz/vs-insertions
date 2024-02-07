@@ -96,7 +96,9 @@ else
         }
     </select>
 
-    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadRecentRps">Load @numberOfRecentRpsToLoad next recent RPS data</button>
+    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => LoadRps(numberOfRecentRpsToLoad)">Load @numberOfRecentRpsToLoad next recent RPS data</button>
+
+    <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadRps()">Load all RPS data</button>
 
     <ol class="mt-2">
         @foreach (var insertion in insertions)
@@ -267,7 +269,7 @@ else
         }
     }
 
-    private void LoadRecentRps()
+    private void LoadRps(int? max = null)
     {
         if (insertions != null)
         {
@@ -280,7 +282,7 @@ else
                     insertion.RefreshRpsSummary();
                 }
 
-                if (count >= numberOfRecentRpsToLoad)
+                if (count >= max)
                 {
                     break;
                 }
