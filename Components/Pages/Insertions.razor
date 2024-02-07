@@ -44,7 +44,7 @@ else
                 <option value="@StatusFilter.Active">Only active</option>
             </select>
 
-            <button class="btn btn-primary me-2" @onclick="StartAsync">Start</button>
+            <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
             
             <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
                 title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
@@ -209,6 +209,9 @@ else
                 DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
             browser = true;
             StateHasChanged();
+
+            await StartAsync();
+            StateHasChanged();
         }
     }
 
@@ -233,6 +236,7 @@ else
     private async Task LoadMoreAsync()
     {
         loading = true;
+        StateHasChanged();
         try
         {
             var skip = insertions?.Length ?? 0;
@@ -267,6 +271,7 @@ else
         finally
         {
             loading = false;
+            StateHasChanged();
         }
     }
 
