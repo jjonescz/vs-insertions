@@ -198,6 +198,9 @@ else
     private string currentRepo = "Roslyn";
     private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
+    /// <summary>Map from VS Insertion PR ID to the corresponding <see cref="RpsSummary"/>.</summary>
+    /// <remarks>Kept separately from the list of insertions so RPS data survive reloads of insertions.</remarks>
+    private readonly Dictionary<string, RpsSummary> rpsSummaries = new();
     private string? errorHtml;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -315,7 +318,21 @@ else
         public string BuildNumber => ParsedTitle.Groups["build"].Value;
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
-        public RpsSummary? RpsSummary { get; private set; }
+        public RpsSummary? RpsSummary
+        {
+            get => page.rpsSummaries.TryGetValue(PullRequestId, out var rpsSummary) ? rpsSummary : null;
+            private set
+            {
+                if (value is null)
+                {
+                    page.rpsSummaries.Remove(PullRequestId);
+                }
+                else
+                {
+                    page.rpsSummaries[PullRequestId] = value;
+                }
+            }
+        }
 
         public async Task AbandonAsync()
         {
