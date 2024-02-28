@@ -140,6 +140,11 @@ else
                     }
                 </span>
 
+                @if (!string.IsNullOrEmpty(insertion.Prefix))
+                {
+                    <span title="Prefix" class="mx-1">[@insertion.Prefix]</span>
+                }
+
                 <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
 
                 <a href="@insertion.Url" title="@insertion.Title">@insertion.BuildNumber</a>
@@ -334,7 +339,29 @@ else
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
-        public string Repo => ParsedTitle?.Repository ?? "<unknown>";
+        public string? Prefix
+        {
+            get
+            {
+                return ParsedTitle?.Prefix switch
+                {
+                    "PR Validation" => "PR",
+                    var p => p,
+                };
+            }
+        }
+        public string Repo
+        {
+            get
+            {
+                var repository = ParsedTitle?.Repository;
+                if (string.IsNullOrEmpty(repository))
+                {
+                    return "<unknown>";
+                }
+                return repository;
+            }
+        }
         public string? SourceBranch => ParsedTitle?.SourceBranch;
         public string BuildNumber => ParsedTitle?.BuildNumber ?? Title;
         public string TargetBranch => node["targetRefName"]!.ToString();

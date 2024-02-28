@@ -15,7 +15,8 @@ public class TitleParserTests
                 Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/532256",
                 Title = "[PR Validation] - ConcurrentCache Roslyn 'main/20240228.1' Insertion into main",
             }, """
-            Repository: Roslyn
+            Prefix: PR Validation
+            Repository: - ConcurrentCache Roslyn
             SourceBranch: main
             BuildNumber: 20240228.1
             TargetBranch: main
@@ -30,6 +31,7 @@ public class TitleParserTests
                 Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/532255",
                 Title = "[PR Validation] Roslyn 'main/20240228.2' Insertion into main",
             }, """
+            Prefix: PR Validation
             Repository: Roslyn
             SourceBranch: main
             BuildNumber: 20240228.2
@@ -45,7 +47,8 @@ public class TitleParserTests
                 Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/528341",
                 Title = "[d17.10 P2] Roslyn and Razor 'main/20240212.11' Insertion into main",
             }, """
-            Repository: Razor
+            Prefix: d17.10 P2
+            Repository: Roslyn and Razor
             SourceBranch: main
             BuildNumber: 20240212.11
             TargetBranch: main
@@ -59,7 +62,13 @@ public class TitleParserTests
             {
                 Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/529917",
                 Title = "[d17.10 P2] Razor 'main/20240219.2' and LiveShare Insertion into main",
-            }, "<null>");
+            }, """
+            Prefix: d17.10 P2
+            Repository: Razor and LiveShare 
+            SourceBranch: main
+            BuildNumber: 20240219.2
+            TargetBranch: main
+            """);
     }
 
     [InlineSnapshotAssertion(parameterName: nameof(expected))]
