@@ -5,6 +5,8 @@ VisualStudioVersion = 17.9.34223.224
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VsInsertions", "src\VsInsertions\VsInsertions.csproj", "{975ADD56-CBEF-46ED-88A5-AB3EC7781203}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VsInsertions.Tests", "test\VsInsertions.Tests\VsInsertions.Tests.csproj", "{F651B044-3B24-47B3-B596-6509A567AF94}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{975ADD56-CBEF-46ED-88A5-AB3EC7781203}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{975ADD56-CBEF-46ED-88A5-AB3EC7781203}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{975ADD56-CBEF-46ED-88A5-AB3EC7781203}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F651B044-3B24-47B3-B596-6509A567AF94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F651B044-3B24-47B3-B596-6509A567AF94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F651B044-3B24-47B3-B596-6509A567AF94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F651B044-3B24-47B3-B596-6509A567AF94}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
