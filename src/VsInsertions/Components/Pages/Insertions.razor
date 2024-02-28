@@ -103,6 +103,13 @@ else
     <div class="my-2">
         <span class="me-2">Display:</span>
 
+        <div class="form-check form-check-inline" title="Display PR validations">
+            <input class="form-check-input" type="checkbox" id="displayPrs" @bind="displayPrs">
+            <label class="form-check-label" for="displayPrs">
+                PRs
+            </label>
+        </div>
+
         <div class="form-check form-check-inline" title="Display draft PRs">
             <input class="form-check-input" type="checkbox" id="displayDrafts" @bind="displayDrafts">
             <label class="form-check-label" for="displayDrafts">
@@ -122,6 +129,7 @@ else
         @foreach (var insertion in insertions)
         {
             if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
+                (!displayPrs && insertion.Prefix == "PR") ||
                 (!displayDrafts && insertion.IsDraft) ||
                 (!displayInactive && insertion.Status != PullRequestStatus.Active))
             {
@@ -139,6 +147,11 @@ else
                             style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
                     }
                 </span>
+
+                @if (!string.IsNullOrEmpty(insertion.Prefix))
+                {
+                    <span title="Prefix" class="mx-1">[@insertion.Prefix]</span>
+                }
 
                 <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
 
@@ -214,7 +227,7 @@ else
     private bool started;
     private bool loading;
     private bool editMode;
-    private bool displayDrafts = true, displayInactive = true;
+    private bool displayPrs = true, displayDrafts = true, displayInactive = true;
     private StatusFilter statusFilter;
     private string currentRepo = "Roslyn";
     private string currentTargetBranch = "refs/heads/main";
@@ -322,7 +335,7 @@ else
 
     class VsInsertion(Insertions page, JsonNode node)
     {
-        private Match? parsedTitle;
+        private ParsedTitle? _parsedTitle;
 
         public bool DisplayJson { get; set; }
         public bool Abandoning { get; private set; }
@@ -330,13 +343,35 @@ else
         public string PullRequestId => node["pullRequestId"]!.ToString();
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
-        public Match ParsedTitle => (parsedTitle ??= Regex.Match(Title, @"(?<repo>\w+) '(?<source>[^']+)/(?<build>[\d.]+)' Insertion into (?<target>.*)"));
+        public ParsedTitle? ParsedTitle => (_parsedTitle ??= TitleParser.Instance.Parse(Title));
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
-        public string Repo => ParsedTitle.Groups["repo"].Value;
-        public string SourceBranch => ParsedTitle.Groups["source"].Value;
-        public string BuildNumber => ParsedTitle.Groups["build"].Value;
+        public string? Prefix
+        {
+            get
+            {
+                return ParsedTitle?.Prefix switch
+                {
+                    "PR Validation" => "PR",
+                    var p => p,
+                };
+            }
+        }
+        public string Repo
+        {
+            get
+            {
+                var repository = ParsedTitle?.Repository;
+                if (string.IsNullOrEmpty(repository))
+                {
+                    return "<unknown>";
+                }
+                return repository;
+            }
+        }
+        public string? SourceBranch => ParsedTitle?.SourceBranch;
+        public string BuildNumber => ParsedTitle?.BuildNumber ?? Title;
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
         public RpsSummary? RpsSummary
