@@ -123,10 +123,17 @@ else
                 Inactive
             </label>
         </div>
+
+        <span class="me-2">Sort by:</span>
+
+        <select class="form-select form-select-sm d-inline-block w-auto" @bind="sortBy">
+            <option value="@SortCriterion.BuildNumber">Build number</option>
+            <option value="@SortCriterion.VsPrNumber">VS PR number</option>
+        </select>
     </div>
 
     <ol class="mt-2">
-        @foreach (var insertion in insertions)
+        @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
         {
             if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
                 (!displayPrs && insertion.Prefix == "PR") ||
@@ -229,6 +236,7 @@ else
     private bool editMode;
     private bool displayPrs = true, displayDrafts = true, displayInactive = true;
     private StatusFilter statusFilter;
+    private SortCriterion sortBy = SortCriterion.BuildNumber;
     private string currentRepo = "Roslyn";
     private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
@@ -312,12 +320,15 @@ else
         }
     }
 
+    private static (int, int, int, string) GetInsertionSortKey(VsInsertion insertion)
+        => insertion.SortKey;
+
     private void LoadRps(int? max = null)
     {
         if (insertions != null)
         {
             var count = 0;
-            foreach (var insertion in insertions)
+            foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
             {
                 if (insertion.RpsSummary is null)
                 {
@@ -341,6 +352,7 @@ else
         public bool Abandoning { get; private set; }
 
         public string PullRequestId => node["pullRequestId"]!.ToString();
+        public int? PullRequestNumber => int.TryParse(PullRequestId, out var number) ? number : null;
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
         public ParsedTitle? ParsedTitle => (_parsedTitle ??= TitleParser.Instance.Parse(Title));
@@ -372,6 +384,19 @@ else
         }
         public string? SourceBranch => ParsedTitle?.SourceBranch;
         public string BuildNumber => ParsedTitle?.BuildNumber ?? Title;
+        public (int, int)? BuildNumberParts
+        {
+            get
+            {
+                var parts = BuildNumber.Split('.', 3);
+                if (parts.Length == 2 && int.TryParse(parts[0], out var part1) && int.TryParse(parts[1], out var part2))
+                {
+                    return (part1, part2);
+                }
+
+                return null;
+            }
+        }
         public string TargetBranch => node["targetRefName"]!.ToString();
         public Review[] Reviews { get; } = node["reviewers"]?.AsArray().Select(x => new Review(x!)).ToArray() ?? Array.Empty<Review>();
         public RpsSummary? RpsSummary
@@ -387,6 +412,23 @@ else
                 {
                     page.rpsSummaries[PullRequestId] = value;
                 }
+            }
+        }
+
+        public (int, int, int, string) SortKey
+        {
+            get
+            {
+                var prNumber = PullRequestNumber ?? -1;
+                var (buildNumber1, buildNumber2) = BuildNumberParts ?? (-1, -1);
+
+                // The string ID is included as fallback if everything fails to parse.
+                return page.sortBy switch
+                {
+                    SortCriterion.BuildNumber => (buildNumber1, buildNumber2, prNumber, PullRequestId),
+                    SortCriterion.VsPrNumber => (prNumber, buildNumber1, buildNumber2, PullRequestId),
+                    _ => throw new ArgumentOutOfRangeException(nameof(sortBy)),
+                };
             }
         }
 
@@ -510,6 +552,12 @@ else
         {
             return num == -1 ? "?" : $"{num}";
         }
+    }
+
+    enum SortCriterion
+    {
+        BuildNumber,
+        VsPrNumber,
     }
 
     enum PullRequestStatus
