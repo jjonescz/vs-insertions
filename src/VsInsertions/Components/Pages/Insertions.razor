@@ -490,7 +490,7 @@ else
                     return null;
                 }
 
-                var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() is "VSEng Perf Automation Account" or "VSEngPerfManager").LastOrDefault();
+                var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() is "VSEng Perf Automation Account" or "VSEngPerfManager" or "VSEng-PIT-Backend").LastOrDefault();
                 if (latestComment == null)
                 {
                     return new RpsRun(InProgress: true, Regressions: 0, BrokenTests: 0);
