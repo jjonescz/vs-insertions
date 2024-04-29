@@ -5,7 +5,14 @@ VisualStudioVersion = 17.9.34223.224
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VsInsertions", "src\VsInsertions\VsInsertions.csproj", "{975ADD56-CBEF-46ED-88A5-AB3EC7781203}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VsInsertions.Tests", "test\VsInsertions.Tests\VsInsertions.Tests.csproj", "{F651B044-3B24-47B3-B596-6509A567AF94}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VsInsertions.Tests", "test\VsInsertions.Tests\VsInsertions.Tests.csproj", "{F651B044-3B24-47B3-B596-6509A567AF94}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution Files", "{66D4E5E2-69E7-4071-96ED-6DD95FB18D18}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		global.json = global.json
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
