@@ -33,7 +33,7 @@ else
     authorizeUrl.Query = query.ToString();
 
     <a href="@authorizeUrl" class="me-2">@(string.IsNullOrEmpty(accessToken) ? "Authorize" : "Re-authorize")</a>
-    <a href="https://app.vsaex.visualstudio.com/me" class="me-2"
+    <a href="https://app.vsaex.visualstudio.com/me" class="me-2" target="_blank"
         title="You can revoke this app's access there">Manage your authorizations</a>
 
     if (!string.IsNullOrEmpty(accessToken))
@@ -162,7 +162,7 @@ else
 
                 <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
 
-                <a href="@insertion.Url" title="@insertion.Title">@insertion.BuildNumber</a>
+                <a href="@insertion.Url" title="@insertion.Title" target="_blank">@insertion.BuildNumber</a>
 
                 <button class="btn btn-outline-secondary btn-sm" @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
                 @if (editMode)
