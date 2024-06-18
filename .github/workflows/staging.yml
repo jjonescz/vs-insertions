@@ -3,8 +3,9 @@ name: Staging Deploy
 on:
   workflow_dispatch:
   pull_request:
+    # Note: we don't trigger on "labeled" because multiple labels would trigger duplicate builds.
+    # Instead you can push new commits or close and re-open the PR to trigger a staging deployment.
     branches: [ main ]
-    types: [ synchronize, reopened, labeled ]
 
 jobs:
   build:
