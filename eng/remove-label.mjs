@@ -10,13 +10,17 @@ export default async ({ context, github }) => {
 
     for (const pull of pulls.data) {
         if (pull.number !== context.issue.number) {
-            console.log(`Removing label from pull request #${pull.id}`);
-            await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pull.number,
-                name: 'deploy: staging',
-            });
+            console.log(`Removing label from pull request #${pull.number}`);
+            try {
+                await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pull.number,
+                    name: 'deploy: staging',
+                });
+            } catch (error) {
+                console.log(error.message);
+            }
         }
     }
 };
