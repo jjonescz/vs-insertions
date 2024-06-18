@@ -4,9 +4,6 @@
 name: Build and deploy ASP.Net Core app to Azure Web App - vsinsertions
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -14,27 +11,12 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # Remove the 'deploy: staging' label from other PRs.
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/build
-
-  deploy:
-    runs-on: windows-latest
-    needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v3
+      - name: Remove label
+        uses: actions/github-script@v7
         with:
-          name: .net-app
-
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: 'vsinsertions'
-          slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_C309554F2A4B4F7CB58E19F0ECF9CF62 }}
-          package: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { default: removeLabel } = await import('file://${{ github.workspace }}/eng/remove-label.js');
+            await removeLabel();
