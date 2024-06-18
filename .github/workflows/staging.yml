@@ -45,5 +45,5 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { default: removeLabel } = await import('./eng/remove-label.js');
+            const { default: removeLabel } = await import('file://${{ github.workspace }}/eng/remove-label.js');
             await removeLabel();
