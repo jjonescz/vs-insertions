@@ -1,0 +1,23 @@
+# See https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions.
+
+name: Build app
+description: Build .NET app
+
+runs:
+  using: composite
+
+  steps:
+    - name: Set up .NET Core
+      uses: actions/setup-dotnet@v3
+      with:
+        global-json-file: global.json
+
+    - name: Publish the app
+      shell: pwsh
+      run: dotnet publish -c Release --self-contained -r win-x86 -o out .\src\VsInsertions\VsInsertions.csproj
+
+    - name: Upload artifact for deployment job
+      uses: actions/upload-artifact@v3
+      with:
+        name: .net-app
+        path: out
