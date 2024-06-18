@@ -13,6 +13,7 @@ runs:
         global-json-file: global.json
 
     - name: Publish the app
+      shell: pwsh
       run: dotnet publish -c Release --self-contained -r win-x86 -o out .\src\VsInsertions\VsInsertions.csproj
 
     - name: Upload artifact for deployment job
