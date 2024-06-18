@@ -15,7 +15,7 @@ jobs:
       - uses: ./.github/actions/build
 
   deploy:
-    if: ${{ github.event.label.name == format('deploy{0} staging', ':') }}
+    if: ${{ contains(github.event.pull_request.labels.*.name, format('deploy{0} staging', ':')) }}
 
     runs-on: windows-latest
     needs: build
