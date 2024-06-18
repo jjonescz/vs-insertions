@@ -22,4 +22,4 @@ jobs:
           script: |
             const workspacePath = process.env.WORKSPACE_DIR.replaceAll('\\', '/');
             const { default: removeLabel } = await import(`file://${workspacePath}/eng/remove-label.mjs`);
-            await removeLabel();
+            await removeLabel({ context, github });
