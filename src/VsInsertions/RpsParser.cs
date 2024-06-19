@@ -96,9 +96,10 @@ public sealed class RpsSummary
     {
         get
         {
+            var build = "Build: " + (BuildStatus?.ToString() ?? "N/A");
             return new(
-                "DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
-                "DDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
+                build + ", DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
+                build + "\nDDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
         }
     }
 }
