@@ -11,6 +11,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddSingleton<TitleParser>();
+builder.Services.AddSingleton<RpsParser>();
 
 var app = builder.Build();
 
