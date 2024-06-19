@@ -29,13 +29,13 @@ public sealed class RpsParser
             var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() is "VSEng Perf Automation Account" or "VSEngPerfManager" or "VSEng-PIT-Backend").LastOrDefault();
             if (latestComment == null)
             {
-                return new RpsRun(InProgress: true, Regressions: 0, BrokenTests: 0);
+                return new RpsRun(Finished: false, Regressions: 0, BrokenTests: 0);
             }
 
             var latestText = latestComment["content"]!.ToString();
             if (latestText.Contains("Test Run **PASSED**"))
             {
-                return new RpsRun(InProgress: false, Regressions: 0, BrokenTests: 0);
+                return new RpsRun(Finished: true, Regressions: 0, BrokenTests: 0);
             }
 
             var regressions = tryGetCount(latestText, "regression");
@@ -46,7 +46,7 @@ public sealed class RpsParser
                 regressions = 0;
             }
 
-            return new RpsRun(InProgress: false, Regressions: regressions, BrokenTests: brokenTests);
+            return new RpsRun(Finished: true, Regressions: regressions, BrokenTests: brokenTests);
         }
 
         static int tryGetCount(string text, string label)
@@ -69,13 +69,13 @@ public sealed class RpsSummary
     public RpsRun? Speedometer { get; set; }
 }
 
-public sealed record RpsRun(bool InProgress, int Regressions, int BrokenTests);
+public sealed record RpsRun(bool Finished, int Regressions, int BrokenTests);
 
 public static class RpsExtensions
 {
     public static string ToSummaryString(this RpsRun? run)
     {
-        if (run == null || run.InProgress || (run.Regressions == -1 && run.BrokenTests == -1))
+        if (run == null || !run.Finished || (run.Regressions == -1 && run.BrokenTests == -1))
         {
             return "?";
         }
