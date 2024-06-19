@@ -96,9 +96,16 @@ public sealed class RpsSummary
     {
         get
         {
+            var displays = new[]
+            {
+                ("Build", BuildStatus.Display()),
+                ("DDRIT", Ddrit.Display()),
+                ("Speedometer", Speedometer.Display())
+            };
+
             return new(
-                "Build: " + BuildStatus.Display().Short + ", DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
-                "Build: " + BuildStatus.Display().Long + "\nDDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
+                string.Join(", ", displays.Select(d => $"{d.Item1}: {d.Item2.Short}")),
+                string.Join("\n", displays.Select(d => $"{d.Item1}: {d.Item2.Long}")));
         }
     }
 }
