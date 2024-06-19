@@ -5,16 +5,21 @@ namespace VsInsertions;
 
 public sealed class RpsParser
 {
-    /// <param name="json">
+    /// <param name="threadsJson">
     /// <see href="https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-7.0&tabs=HTTP"/>
+    /// </param>
+    /// <param name="checksJson">
+    /// <see href="https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/evaluations/list?view=azure-devops-rest-6.0&tabs=HTTP"/>
     /// </param>
     /// <param name="summary">
     /// Will be filled with the parsed data.
     /// </param>
-    public void ParseRpsSummary(string json, RpsSummary rpsSummary)
+    public void ParseRpsSummary(string threadsJson, string checksJson, RpsSummary rpsSummary)
     {
-        var node = JsonNode.Parse(json);
-        var threads = node!["value"]!.AsArray();
+        var threadsNode = JsonNode.Parse(threadsJson);
+        var threads = threadsNode!["value"]!.AsArray();
+
+        rpsSummary.BuildStatus = getBuildStatus(checksJson);
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
         rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer");
 
@@ -59,12 +64,31 @@ public sealed class RpsParser
 
             return result;
         }
+
+        static PolicyEvaluationStatus? getBuildStatus(string checksJson)
+        {
+            var checksNode = JsonNode.Parse(checksJson);
+            var checks = checksNode!["value"]!.AsArray();
+            var buildCheck = checks.Where(x => x!["configuration"]!["settings"]!["displayName"]!.ToString().Contains("CloudBuild", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            if (buildCheck == null)
+            {
+                return null;
+            }
+
+            if (Enum.TryParse<PolicyEvaluationStatus>(buildCheck!["status"]!.ToString(), ignoreCase: true, out var result))
+            {
+                return result;
+            }
+
+            return null;
+        }
     }
 }
 
 public sealed class RpsSummary
 {
     public bool Loaded { get; set; }
+    public PolicyEvaluationStatus? BuildStatus { get; set; }
     public RpsRun? Ddrit { get; set; }
     public RpsRun? Speedometer { get; set; }
 
@@ -77,6 +101,19 @@ public sealed class RpsSummary
                 "DDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
         }
     }
+}
+
+/// <summary>
+/// <see cref="https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/evaluations/list?view=azure-devops-rest-6.0#policyevaluationstatus"/>
+/// </summary>
+public enum PolicyEvaluationStatus
+{
+    Queued,
+    Running,
+    Approved,
+    Rejected,
+    Broken,
+    NotApplicable,
 }
 
 public sealed record RpsRun(bool Finished, int Regressions, int BrokenTests);

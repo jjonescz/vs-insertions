@@ -469,9 +469,13 @@ else
         {
             try
             {
-                // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-7.0&tabs=HTTP
-                var json = await page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
-                page.RpsParser.ParseRpsSummary(json, rpsSummary);
+                // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-6.0&tabs=HTTP
+                var threadsJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
+                
+                // https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/evaluations/list?view=azure-devops-rest-6.0&tabs=HTTP
+                var checksJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee/{PullRequestId}&api-version=6.0-preview.1");
+
+                page.RpsParser.ParseRpsSummary(threadsJson: await threadsJson, checksJson: await checksJson, rpsSummary);
                 rpsSummary.Loaded = true;
                 page.StateHasChanged();
             }

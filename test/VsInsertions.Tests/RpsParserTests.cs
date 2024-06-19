@@ -5,7 +5,7 @@ namespace VsInsertions.Tests;
 
 public class RpsParserTests
 {
-    public readonly record struct Entry(string Url, string Threads);
+    public readonly record struct Entry(string Url, string Threads = "", string Checks = "");
 
     [Fact]
     public void Running()
@@ -229,8 +229,81 @@ public class RpsParserTests
         Verify(new()
         {
             Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/558633",
-            Threads = "",
+            Checks = """
+            {
+                "configuration": {
+                    "createdBy": {
+                        "displayName": "Patrick Le Quere",
+                        "url": "https://spsprodwus21.vssps.visualstudio.com/A0ba55e64-8cdb-444e-beea-1056cf958523/_apis/Identities/1ea4ddb9-49b4-4dfd-8a47-635da17a7565",
+                        "_links": {
+                            "avatar": {
+                                "href": "https://dev.azure.com/devdiv/_apis/GraphProfile/MemberAvatars/aad.ZDVkYTI4ZTgtNmFlNC03Nzk3LTgyNTEtNTc3NGNmYzA5ZWZm"
+                            }
+                        },
+                        "id": "1ea4ddb9-49b4-4dfd-8a47-635da17a7565",
+                        "uniqueName": "plequere@microsoft.com",
+                        "imageUrl": "https://dev.azure.com/devdiv/_api/_common/identityImage?id=1ea4ddb9-49b4-4dfd-8a47-635da17a7565",
+                        "descriptor": "aad.ZDVkYTI4ZTgtNmFlNC03Nzk3LTgyNTEtNTc3NGNmYzA5ZWZm"
+                    },
+                    "createdDate": "2021-11-13T00:23:33.3008147Z",
+                    "isEnabled": true,
+                    "isBlocking": true,
+                    "isDeleted": false,
+                    "settings": {
+                        "buildDefinitionId": 10310,
+                        "queueOnSourceUpdateOnly": true,
+                        "manualQueueOnly": false,
+                        "displayName": "CloudBuild - PR",
+                        "validDuration": 4320,
+                        "scope": [
+                            {
+                                "refName": "refs/heads/main",
+                                "matchKind": "Exact",
+                                "repositoryId": "a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            }
+                        ]
+                    },
+                    "isEnterpriseManaged": false,
+                    "_links": {
+                        "self": {
+                            "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/configurations/8171"
+                        },
+                        "policyType": {
+                            "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/types/0609b952-1397-4640-95ec-e00a01b2c241"
+                        }
+                    },
+                    "revision": 5,
+                    "id": 8171,
+                    "url": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/configurations/8171",
+                    "type": {
+                        "id": "0609b952-1397-4640-95ec-e00a01b2c241",
+                        "url": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/types/0609b952-1397-4640-95ec-e00a01b2c241",
+                        "displayName": "Build"
+                    }
+                },
+                "artifactId": "vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee%2f558633",
+                "evaluationId": "284f5e50-37a6-4138-857f-1b9a43c5fb8c",
+                "startedDate": "2024-06-18T03:13:23.9185139Z",
+                "completedDate": "2024-06-18T03:41:23.2075138Z",
+                "status": "rejected",
+                "context": {
+                    "lastMergeCommitId": "08d20174821c24fd6e0135290d76a9eac2cf376f",
+                    "lastMergeSourceCommitId": "a2114d9b910eac4c585dd2b16f59607baff74178",
+                    "lastMergeTargetCommitId": "ff59e9e0f35f2468d42fcdc177119906add38e50",
+                    "buildId": 9742932,
+                    "buildDefinitionId": 10310,
+                    "buildDefinitionName": "DD-CB-PR",
+                    "buildIsNotCurrent": false,
+                    "buildStartedUtc": "2024-06-18T03:13:15.5036803Z",
+                    "isExpired": false,
+                    "buildAfterMerge": false,
+                    "wasAutoRequeued": false,
+                    "buildOutputPreview": null
+                }
+            }
+            """,
         }, """
+            BuildStatus: Rejected
             Display:
               Short: DDRIT: N/A, Speedometer: N/A
               Long:
@@ -244,11 +317,16 @@ public class RpsParserTests
     {
         var parser = new RpsParser();
         var rpsSummary = new RpsSummary();
-        parser.ParseRpsSummary($$"""
-            {
-                "value": [{{input.Threads}}]
-            }
-            """, rpsSummary);
+        parser.ParseRpsSummary(
+            threadsJson: wrapJson(input.Threads),
+            checksJson: wrapJson(input.Checks),
+            rpsSummary);
         InlineSnapshot.Validate(rpsSummary, expected, filePath, lineNumber);
+
+        static string wrapJson(string value) => $$"""
+            {
+                "value": [{{value}}]
+            }
+            """;
     }
 }
