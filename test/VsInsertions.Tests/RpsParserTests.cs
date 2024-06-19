@@ -89,9 +89,9 @@ public class RpsParserTests
         }, """
             Speedometer: {}
             Display:
-              Short: Build: N/A, DDRIT: N/A, Speedometer: ...
+              Short: Build: ?, DDRIT: N/A, Speedometer: ...
               Long:
-                Build: N/A
+                Build: Unknown
                 DDRIT: Not started
                 Speedometer: Running
             """);
@@ -217,9 +217,9 @@ public class RpsParserTests
               Finished: true
               BrokenTests: 2
             Display:
-              Short: Build: N/A, DDRIT: N/A, Speedometer: 0+2
+              Short: Build: ?, DDRIT: N/A, Speedometer: 0+2
               Long:
-                Build: N/A
+                Build: Unknown
                 DDRIT: Not started
                 Speedometer: Regressions: 0, Broken tests: 2
             """);
@@ -307,7 +307,7 @@ public class RpsParserTests
         }, """
             BuildStatus: Rejected
             Display:
-              Short: Build: Rejected, DDRIT: N/A, Speedometer: N/A
+              Short: Build: ✘, DDRIT: N/A, Speedometer: N/A
               Long:
                 Build: Rejected
                 DDRIT: Not started

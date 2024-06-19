@@ -96,10 +96,9 @@ public sealed class RpsSummary
     {
         get
         {
-            var build = "Build: " + (BuildStatus?.ToString() ?? "N/A");
             return new(
-                build + ", DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
-                build + "\nDDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
+                "Build: " + BuildStatus.Display().Short + ", DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
+                "Build: " + BuildStatus.Display().Long + "\nDDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
         }
     }
 }
@@ -121,6 +120,32 @@ public sealed record RpsRun(bool Finished, int Regressions, int BrokenTests);
 
 public static class RpsExtensions
 {
+    public static Display Display(this PolicyEvaluationStatus? status)
+    {
+        if (status == null)
+        {
+            return new("?", "Unknown");
+        }
+
+        return status switch
+        {
+            PolicyEvaluationStatus.Running => new("...", "Running"),
+            PolicyEvaluationStatus.Queued => new("...", "Queued"),
+            PolicyEvaluationStatus.Approved => new("✔", "Approved"),
+            PolicyEvaluationStatus.Rejected => new("✘", "Rejected"),
+            PolicyEvaluationStatus.Broken => new("✘", "Broken"),
+            PolicyEvaluationStatus.NotApplicable => new("N/A", "Not applicable"),
+            null => new("?", "Unknown"),
+            { } s => unknown(s),
+        };
+
+        static Display unknown(PolicyEvaluationStatus status)
+        {
+            var str = status.ToString()!;
+            return new(str, str);
+        }
+    }
+
     public static Display Display(this RpsRun? run)
     {
         if (run == null)
