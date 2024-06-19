@@ -75,7 +75,17 @@ public static class RpsExtensions
 {
     public static string ToSummaryString(this RpsRun? run)
     {
-        if (run == null || !run.Finished || (run.Regressions == -1 && run.BrokenTests == -1))
+        if (run == null)
+        {
+            return "N/A";
+        }
+
+        if (!run.Finished)
+        {
+            return "...";
+        }
+
+        if (run.Regressions == -1 && run.BrokenTests == -1)
         {
             return "?";
         }
