@@ -1,16 +1,100 @@
 ﻿using Meziantou.Framework.InlineSnapshotTesting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace VsInsertions.Tests;
 
 public class RpsParserTests
 {
     public readonly record struct Entry(string Url, string Threads);
+
+    [Fact]
+    public void Running()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/558629",
+            Threads = """
+            {
+                "pullRequestThreadContext": null,
+                "id": 6552961,
+                "publishedDate": "2024-06-18T04:02:14.093Z",
+                "lastUpdatedDate": "2024-06-18T18:22:24.223Z",
+                "comments": [
+                    {
+                        "id": 1,
+                        "parentCommentId": 0,
+                        "author": {
+                            "displayName": "DevDiv Build Service (devdiv)",
+                            "url": "https://spsprodwus21.vssps.visualstudio.com/A0ba55e64-8cdb-444e-beea-1056cf958523/_apis/Identities/6d3b3c1a-123d-454c-a78b-b4a426164711",
+                            "_links": {
+                                "avatar": {
+                                    "href": "https://dev.azure.com/devdiv/_apis/GraphProfile/MemberAvatars/svc.MGJhNTVlNjQtOGNkYi00NDRlLWJlZWEtMTA1NmNmOTU4NTIzOkJ1aWxkOjBiZGJjNTkwLWEwNjItNGMzZi1iMGY2LTkzODNmNjc4NjVlZQ"
+                                }
+                            },
+                            "id": "6d3b3c1a-123d-454c-a78b-b4a426164711",
+                            "uniqueName": "",
+                            "imageUrl": "https://dev.azure.com/devdiv/_apis/GraphProfile/MemberAvatars/svc.MGJhNTVlNjQtOGNkYi00NDRlLWJlZWEtMTA1NmNmOTU4NTIzOkJ1aWxkOjBiZGJjNTkwLWEwNjItNGMzZi1iMGY2LTkzODNmNjc4NjVlZQ",
+                            "descriptor": "svc.MGJhNTVlNjQtOGNkYi00NDRlLWJlZWEtMTA1NmNmOTU4NTIzOkJ1aWxkOjBiZGJjNTkwLWEwNjItNGMzZi1iMGY2LTkzODNmNjc4NjVlZQ"
+                        },
+                        "content": "###We've started Speedometer\r\n[Learn more about Speedometer](https://devdiv.visualstudio.com/DevDiv/_wiki/wikis/DevDiv.wiki/24357/Speedometer)\r\n[Update 1](https://dev.azure.com/DevDiv/DevDiv/_git/VS/pullrequest/558629?_a=files&iteration=1&base=0)\r\n>\r\n>\r\n>:clock2: ETA 09:58 AM GMT *(around 6 hours)*\r\n>:floppy_disk: [Install your build](https://vsdrop.corp.microsoft.com/file/v1/Products/DevDiv/VS/a792c33b35dfffc5bd2d648861ffdb4b4ba34534/2c80eaba-6f1d-a165-850b-d0d16a8d7085;bootstrappers/Enterprise/vs_enterprise.exe)\r\n>\r\n>:rocket: [View Test Pipeline](https://devdiv.visualstudio.com/DevDiv/_build/results?buildId=9743046)\r\n### **Outages** which may impact Speedometer.\n<details><summary>There is 1 active outage:</summary>\n\n\r\n- Sev3: [PerfDDRITs and Speedometer tests run impact by Windows Updates](https://portal.microsofticm.com/imp/v3/outages/details/504334001/home)\n\r\n\n&nbsp;&nbsp;&nbsp;[View Active Outages](https://portal.microsofticm.com/imp/v3/outages/dashboard/vsengineering/declaredoutages)\n\r\n</details>\r\n",
+                        "publishedDate": "2024-06-18T04:02:14.093Z",
+                        "lastUpdatedDate": "2024-06-18T04:02:14.093Z",
+                        "lastContentUpdatedDate": "2024-06-18T04:02:14.093Z",
+                        "commentType": "text",
+                        "usersLiked": [],
+                        "_links": {
+                            "self": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/558629/threads/6552961/comments/1"
+                            },
+                            "repository": {
+                                "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            },
+                            "threads": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/558629/threads/6552961"
+                            },
+                            "pullRequests": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/pullRequests/558629"
+                            }
+                        }
+                    }
+                ],
+                "status": "fixed",
+                "threadContext": null,
+                "properties": {
+                    "RunIdentifier": {
+                        "$type": "System.String",
+                        "$value": "RPS-Speedometer-14760-9743046-1"
+                    },
+                    "BuildId": {
+                        "$type": "System.Int32",
+                        "$value": 9743046
+                    },
+                    "DefinitionId": {
+                        "$type": "System.Int32",
+                        "$value": 14760
+                    }
+                },
+                "identities": null,
+                "isDeleted": false,
+                "_links": {
+                    "self": {
+                        "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/558629/threads/6552961"
+                    },
+                    "repository": {
+                        "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                    }
+                }
+            }
+            """
+        }, """
+            Speedometer: {}
+            Display:
+              Short: DDRIT: N/A, Speedometer: ...
+              Long:
+                DDRIT: Not started
+                Speedometer: Running
+            """);
+    }
 
     [Fact]
     public void BrokenIterations()
