@@ -6,8 +6,6 @@ public readonly record struct ParsedTitle(string Prefix, string Repository, stri
 
 public sealed partial class TitleParser
 {
-    public static TitleParser Instance { get; } = new();
-
     public ParsedTitle? Parse(string title)
     {
         if (TitleRegex().Match(title) is { Success: true } match)

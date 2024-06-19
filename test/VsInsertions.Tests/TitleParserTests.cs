@@ -74,6 +74,6 @@ public class TitleParserTests
     [InlineSnapshotAssertion(parameterName: nameof(expected))]
     private static void Verify(Entry input, string? expected = null, [CallerFilePath] string? filePath = null, [CallerLineNumber] int lineNumber = -1)
     {
-        InlineSnapshot.Validate(TitleParser.Instance.Parse(input.Title), expected, filePath, lineNumber);
+        InlineSnapshot.Validate(new TitleParser().Parse(input.Title), expected, filePath, lineNumber);
     }
 }

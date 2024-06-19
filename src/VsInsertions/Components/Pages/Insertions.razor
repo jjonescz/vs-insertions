@@ -11,6 +11,8 @@
 @inject NavigationManager NavigationManager
 @inject IHttpContextAccessor ContextAccessor
 @inject IDataProtectionProvider DataProtectionProvider
+@inject TitleParser TitleParser
+@inject RpsParser RpsParser
 
 <PageTitle>Insertions</PageTitle>
 
@@ -185,8 +187,9 @@ else
                 }
                 else
                 {
-                    @: DDRIT: @RpsRunToString(insertion.RpsSummary.Ddrit),
-                    @: Speedometer: @RpsRunToString(insertion.RpsSummary.Speedometer)
+                    var display = insertion.RpsSummary.Display;
+                    @(" ")
+                    <span title="@display.Long">@display.Short</span>
                     @(" ")
                 }
 
@@ -355,7 +358,7 @@ else
         public int? PullRequestNumber => int.TryParse(PullRequestId, out var number) ? number : null;
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
-        public ParsedTitle? ParsedTitle => (_parsedTitle ??= TitleParser.Instance.Parse(Title));
+        public ParsedTitle? ParsedTitle => (_parsedTitle ??= page.TitleParser.Parse(Title));
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
@@ -466,12 +469,13 @@ else
         {
             try
             {
-                // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-7.0&tabs=HTTP
-                var json = await page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
-                var node = JsonNode.Parse(json);
-                var threads = node!["value"]!.AsArray();
-                rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
-                rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer");
+                // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-6.0&tabs=HTTP
+                var threadsJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
+                
+                // https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/evaluations/list?view=azure-devops-rest-6.0&tabs=HTTP
+                var checksJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee/{PullRequestId}&api-version=6.0-preview.1");
+
+                page.RpsParser.ParseRpsSummary(threadsJson: await threadsJson, checksJson: await checksJson, rpsSummary);
                 rpsSummary.Loaded = true;
                 page.StateHasChanged();
             }
@@ -481,40 +485,6 @@ else
                 rpsSummary.Loaded = true;
                 page.StateHasChanged();
             }
-
-            static RpsRun? getRunResults(JsonArray threads, string text)
-            {
-                var latestThread = threads.Where(x => x!["comments"]!.AsArray().Any(x => x!["content"]?.ToString().Contains(text) ?? false)).LastOrDefault();
-                if (latestThread == null)
-                {
-                    return null;
-                }
-
-                var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() is "VSEng Perf Automation Account" or "VSEngPerfManager" or "VSEng-PIT-Backend").LastOrDefault();
-                if (latestComment == null)
-                {
-                    return new RpsRun(InProgress: true, Regressions: 0, BrokenTests: 0);
-                }
-
-                var latestText = latestComment["content"]!.ToString();
-                if (latestText.Contains("Test Run **PASSED**"))
-                {
-                    return new RpsRun(InProgress: false, Regressions: 0, BrokenTests: 0);
-                }
-
-                return new RpsRun(InProgress: false, Regressions: tryGetCount(latestText, "regression"), BrokenTests: tryGetCount(latestText, "broken test"));
-            }
-
-            static int tryGetCount(string text, string label)
-            {
-                var match = Regex.Match(text, @$"(\d+) {label}");
-                if (!match.Success || !int.TryParse(match.Groups[1].Value, out var result))
-                {
-                    return -1;
-                }
-
-                return result;
-            }
         }
     }
 
@@ -523,35 +493,6 @@ else
         public string DisplayName => node["displayName"]!.ToString();
         public string ImageUrl => node["imageUrl"]!.ToString();
         public Vote Vote => (Vote)(int)node["vote"]!;
-    }
-
-    class RpsSummary
-    {
-        public bool Loaded { get; set; }
-        public RpsRun? Ddrit { get; set; }
-        public RpsRun? Speedometer { get; set; }
-    }
-
-    record RpsRun(bool InProgress, int Regressions, int BrokenTests);
-
-    static string RpsRunToString(RpsRun? run)
-    {
-        if (run == null || run.InProgress || (run.Regressions == -1 && run.BrokenTests == -1))
-        {
-            return "?";
-        }
-
-        if (run.BrokenTests is not (0 or -1))
-        {
-            return $"{numberToString(run.Regressions)}+{run.BrokenTests}";
-        }
-
-        return numberToString(run.Regressions);
-
-        static string numberToString(int num)
-        {
-            return num == -1 ? "?" : $"{num}";
-        }
     }
 
     enum SortCriterion
