@@ -129,7 +129,13 @@ public class RpsParserTests
             """
         }, """
             Speedometer:
+              Finished: true
               BrokenTests: 2
+            Display:
+              Short: DDRIT: N/A, Speedometer: 0+2
+              Long:
+                DDRIT: Not started
+                Speedometer: Regressions: 0, Broken tests: 2
             """);
     }
 
@@ -140,7 +146,13 @@ public class RpsParserTests
         {
             Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/558633",
             Threads = "",
-        }, "{}");
+        }, """
+            Display:
+              Short: DDRIT: N/A, Speedometer: N/A
+              Long:
+                DDRIT: Not started
+                Speedometer: Not started
+            """);
     }
 
     [InlineSnapshotAssertion(parameterName: nameof(expected))]

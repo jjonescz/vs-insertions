@@ -68,11 +68,14 @@ public sealed class RpsSummary
     public RpsRun? Ddrit { get; set; }
     public RpsRun? Speedometer { get; set; }
 
-    public Display Display()
+    public Display Display
     {
-        return new(
-            "DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
-            "DDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
+        get
+        {
+            return new(
+                "DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
+                "DDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
+        }
     }
 }
 
