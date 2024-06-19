@@ -129,7 +129,6 @@ public class RpsParserTests
             """
         }, """
             Speedometer:
-              Regressions: -1
               BrokenTests: 2
             """);
     }

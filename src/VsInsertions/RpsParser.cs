@@ -38,7 +38,15 @@ public sealed class RpsParser
                 return new RpsRun(InProgress: false, Regressions: 0, BrokenTests: 0);
             }
 
-            return new RpsRun(InProgress: false, Regressions: tryGetCount(latestText, "regression"), BrokenTests: tryGetCount(latestText, "broken test"));
+            var regressions = tryGetCount(latestText, "regression");
+            var brokenTests = tryGetCount(latestText, "broken test");
+
+            if (brokenTests > 0 && regressions == -1)
+            {
+                regressions = 0;
+            }
+
+            return new RpsRun(InProgress: false, Regressions: regressions, BrokenTests: brokenTests);
         }
 
         static int tryGetCount(string text, string label)
