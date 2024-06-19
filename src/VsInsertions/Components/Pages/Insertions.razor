@@ -187,8 +187,9 @@ else
                 }
                 else
                 {
-                    @: DDRIT: @insertion.RpsSummary.Ddrit.ToSummaryString(),
-                    @: Speedometer: @insertion.RpsSummary.Speedometer.ToSummaryString()
+                    var display = insertion.RpsSummary.Display();
+                    @(" ")
+                    <span title="@display.Long">@display.Short</span>
                     @(" ")
                 }
 

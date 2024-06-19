@@ -67,35 +67,46 @@ public sealed class RpsSummary
     public bool Loaded { get; set; }
     public RpsRun? Ddrit { get; set; }
     public RpsRun? Speedometer { get; set; }
+
+    public Display Display()
+    {
+        return new(
+            "DDRIT: " + Ddrit.Display().Short + ", Speedometer: " + Speedometer.Display().Short,
+            "DDRIT: " + Ddrit.Display().Long + "\nSpeedometer: " + Speedometer.Display().Long);
+    }
 }
 
 public sealed record RpsRun(bool Finished, int Regressions, int BrokenTests);
 
 public static class RpsExtensions
 {
-    public static string ToSummaryString(this RpsRun? run)
+    public static Display Display(this RpsRun? run)
     {
         if (run == null)
         {
-            return "N/A";
+            return new("N/A", "Not started");
         }
 
         if (!run.Finished)
         {
-            return "...";
+            return new("...", "Running");
         }
 
         if (run.Regressions == -1 && run.BrokenTests == -1)
         {
-            return "?";
+            return new("?", "Unknown result");
         }
+
+        var regressions = numberToString(run.Regressions);
 
         if (run.BrokenTests is not (0 or -1))
         {
-            return $"{numberToString(run.Regressions)}+{run.BrokenTests}";
+            return new(
+                $"{regressions}+{run.BrokenTests}",
+                $"Regressions: {regressions}, Broken tests: {run.BrokenTests}");
         }
 
-        return numberToString(run.Regressions);
+        return new(regressions, $"Regressions: {regressions}");
 
         static string numberToString(int num)
         {
@@ -103,3 +114,5 @@ public static class RpsExtensions
         }
     }
 }
+
+public sealed record Display(string Short, string Long);
