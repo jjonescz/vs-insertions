@@ -11,6 +11,7 @@
 @inject NavigationManager NavigationManager
 @inject IHttpContextAccessor ContextAccessor
 @inject IDataProtectionProvider DataProtectionProvider
+@inject TitleParser TitleParser
 
 <PageTitle>Insertions</PageTitle>
 
@@ -355,7 +356,7 @@ else
         public int? PullRequestNumber => int.TryParse(PullRequestId, out var number) ? number : null;
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
-        public ParsedTitle? ParsedTitle => (_parsedTitle ??= TitleParser.Instance.Parse(Title));
+        public ParsedTitle? ParsedTitle => (_parsedTitle ??= page.TitleParser.Parse(Title));
         public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;

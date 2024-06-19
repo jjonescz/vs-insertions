@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using System.Text.Json.Nodes;
+using VsInsertions;
 using VsInsertions.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddSingleton<TitleParser>();
 
 var app = builder.Build();
 
