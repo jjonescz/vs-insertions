@@ -69,13 +69,13 @@ public sealed class RpsParser
         {
             var checksNode = JsonNode.Parse(checksJson);
             var checks = checksNode!["value"]!.AsArray();
-            var buildCheck = checks.Where(x => x!["configuration"]!["settings"]!["displayName"]!.ToString().Contains("CloudBuild", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            var buildCheck = checks.Where(x => x?["configuration"]?["settings"]?["displayName"]?.ToString().Contains("CloudBuild", StringComparison.OrdinalIgnoreCase) == true).FirstOrDefault();
             if (buildCheck == null)
             {
                 return null;
             }
 
-            if (Enum.TryParse<PolicyEvaluationStatus>(buildCheck!["status"]!.ToString(), ignoreCase: true, out var result))
+            if (Enum.TryParse<PolicyEvaluationStatus>(buildCheck?["status"]?.ToString(), ignoreCase: true, out var result))
             {
                 return result;
             }
