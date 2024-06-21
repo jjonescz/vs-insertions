@@ -47,5 +47,5 @@ h1:focus {
     }
 
 .table > :not(caption) > * > * {
-    padding: 0 0.2rem;
+    padding: 0 0.5rem;
 }
