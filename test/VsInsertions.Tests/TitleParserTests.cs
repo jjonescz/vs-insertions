@@ -20,6 +20,7 @@ public class TitleParserTests
             SourceBranch: main
             BuildNumber: 20240228.1
             TargetBranch: main
+            IsPr: true
             """);
     }
 
@@ -36,6 +37,7 @@ public class TitleParserTests
             SourceBranch: main
             BuildNumber: 20240228.2
             TargetBranch: main
+            IsPr: true
             """);
     }
 
@@ -52,6 +54,7 @@ public class TitleParserTests
             SourceBranch: lspeditorfeaturedetector
             BuildNumber: 20240604.3
             TargetBranch: main
+            IsPr: true
             """);
     }
 
@@ -68,6 +71,7 @@ public class TitleParserTests
             SourceBranch: dev/jjonescz/remove-internal-runtime-support
             BuildNumber: 20240621.3
             TargetBranch: main
+            IsPr: true
             """);
     }
 
@@ -84,6 +88,7 @@ public class TitleParserTests
             SourceBranch: dev/jjonescz/remove-internal-runtime-support
             BuildNumber: 20240621.3
             TargetBranch: main
+            IsPr: true
             """);
     }
 
@@ -100,6 +105,7 @@ public class TitleParserTests
             SourceBranch: main
             BuildNumber: 20240611.1
             TargetBranch: main
+            IsPr: true
             """);
     }
 
@@ -116,6 +122,7 @@ public class TitleParserTests
             SourceBranch: main
             BuildNumber: 20240606.3
             TargetBranch: main
+            IsPr: true
             """);
     }
 

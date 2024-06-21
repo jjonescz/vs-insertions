@@ -164,7 +164,7 @@ else
             @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
             {
                 if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
-                (!displayPrs && insertion.Prefix == "PR") ||
+                (!displayPrs && insertion.ParsedTitle?.IsPr == true) ||
                 (!displayDrafts && insertion.IsDraft) ||
                 (!displayInactive && insertion.Status != PullRequestStatus.Active))
                 {

@@ -2,7 +2,10 @@
 
 namespace VsInsertions;
 
-public readonly record struct ParsedTitle(string Prefix, string Repository, string SourceBranch, string BuildNumber, string TargetBranch);
+public readonly record struct ParsedTitle(string Prefix, string Repository, string SourceBranch, string BuildNumber, string TargetBranch)
+{
+    public bool IsPr => Prefix.Contains("PR", StringComparison.OrdinalIgnoreCase);
+}
 
 public sealed partial class TitleParser
 {
