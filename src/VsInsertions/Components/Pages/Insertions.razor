@@ -36,7 +36,7 @@ else
 
     <a href="@authorizeUrl" class="me-2">@(string.IsNullOrEmpty(accessToken) ? "Authorize" : "Re-authorize")</a>
     <a href="https://app.vsaex.visualstudio.com/me" class="me-2" target="_blank"
-        title="You can revoke this app's access there">Manage your authorizations</a>
+       title="You can revoke this app's access there">Manage your authorizations</a>
 
     if (!string.IsNullOrEmpty(accessToken))
     {
@@ -47,9 +47,9 @@ else
             </select>
 
             <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
-            
+
             <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
-                title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
+                    title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
                 @if (!editMode)
                 {
                     @:Edit mode
@@ -98,9 +98,15 @@ else
         }
     </select>
 
-    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => LoadRps(numberOfRecentRpsToLoad)">Load @numberOfRecentRpsToLoad next recent RPS data</button>
+    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => LoadRps(numberOfRecentRpsToLoad)"
+            title="Loads RPS/build status for @numberOfRecentRpsToLoad most recent PRs with not-yet-loaded RPS/build status across all branches and repos">
+        Load @numberOfRecentRpsToLoad next recent RPS data
+    </button>
 
-    <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadRps()">Load all RPS data</button>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadRps()"
+            title="Loads RPS/build status for all loaded PRs with not-yet-loaded RPS/build status">
+        Load all RPS data
+    </button>
 
     <div class="my-2">
         <span class="me-2">Display:</span>
@@ -138,9 +144,9 @@ else
         @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
         {
             if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
-                (!displayPrs && insertion.Prefix == "PR") ||
-                (!displayDrafts && insertion.IsDraft) ||
-                (!displayInactive && insertion.Status != PullRequestStatus.Active))
+            (!displayPrs && insertion.Prefix == "PR") ||
+            (!displayDrafts && insertion.IsDraft) ||
+            (!displayInactive && insertion.Status != PullRequestStatus.Active))
             {
                 continue;
             }
@@ -153,7 +159,7 @@ else
                     @foreach (var review in insertion.Reviews)
                     {
                         <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
-                            style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
+                             style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
                     }
                 </span>
 
@@ -193,7 +199,10 @@ else
                     @(" ")
                 }
 
-                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary">Refresh RPS</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary"
+                        title="Fetch RPS and build status again">
+                    Refresh RPS
+                </button>
 
                 @if (insertion.DisplayJson)
                 {
@@ -471,7 +480,7 @@ else
             {
                 // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-6.0&tabs=HTTP
                 var threadsJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
-                
+
                 // https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/evaluations/list?view=azure-devops-rest-6.0&tabs=HTTP
                 var checksJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee/{PullRequestId}&api-version=6.0-preview.1");
 
