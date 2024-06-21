@@ -36,7 +36,7 @@ else
 
     <a href="@authorizeUrl" class="me-2">@(string.IsNullOrEmpty(accessToken) ? "Authorize" : "Re-authorize")</a>
     <a href="https://app.vsaex.visualstudio.com/me" class="me-2" target="_blank"
-        title="You can revoke this app's access there">Manage your authorizations</a>
+       title="You can revoke this app's access there">Manage your authorizations</a>
 
     if (!string.IsNullOrEmpty(accessToken))
     {
@@ -47,9 +47,9 @@ else
             </select>
 
             <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
-            
+
             <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
-                title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
+                    title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
                 @if (!editMode)
                 {
                     @:Edit mode
@@ -98,9 +98,15 @@ else
         }
     </select>
 
-    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => LoadRps(numberOfRecentRpsToLoad)">Load @numberOfRecentRpsToLoad next recent RPS data</button>
+    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => LoadRps(numberOfRecentRpsToLoad)"
+            title="Loads RPS/build status for @numberOfRecentRpsToLoad most recent PRs with not-yet-loaded RPS/build status across all branches and repos">
+        Load @numberOfRecentRpsToLoad next recent RPS data
+    </button>
 
-    <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadRps()">Load all RPS data</button>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadRps()"
+            title="Loads RPS/build status for all loaded PRs with not-yet-loaded RPS/build status">
+        Load all RPS data
+    </button>
 
     <div class="my-2">
         <span class="me-2">Display:</span>
@@ -134,74 +140,106 @@ else
         </select>
     </div>
 
-    <ol class="mt-2">
-        @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
-        {
-            if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
+    <table class="table table-hover w-auto align-middle">
+        <thead>
+            <tr>
+                <th scope="col" title="PR number">PR #</th>
+                <th scope="col" title="PR status">S</th>
+                <th scope="col" title="Draft?">D</th>
+                <th scope="col" title="Reviewers">R</th>
+                <th scope="col" title="Title prefix">Prefix</th>
+                <th scope="col" title="Source branch">Source</th>
+                <th scope="col" title="Build number">Build #</th>
+                @if (editMode)
+                {
+                    <th scope="col">Edit</th>
+                }
+                <th scope="col">Build</th>
+                <th scope="col">DDRIT</th>
+                <th scope="col">Speedometer</th>
+                <th scope="col"></th> @* Refresh RPS *@
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
+            {
+                if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
                 (!displayPrs && insertion.Prefix == "PR") ||
                 (!displayDrafts && insertion.IsDraft) ||
                 (!displayInactive && insertion.Status != PullRequestStatus.Active))
-            {
-                continue;
-            }
+                {
+                    continue;
+                }
 
-            <li value="@insertion.PullRequestId">
-                <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
-                <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
+                <tr>
+                    <th scope="row" title="PR number">@insertion.PullRequestId</th>
+                    <td title="@insertion.Status">@StatusToEmoji(insertion.Status)</td>
+                    <td title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</td>
 
-                <span style="margin-left: 0.1em; margin-right: 0.1em">
-                    @foreach (var review in insertion.Reviews)
+                    <td>
+                        @foreach (var review in insertion.Reviews)
+                        {
+                            <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
+                                 style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
+                        }
+                    </td>
+
+                    <td title="Prefix">
+                        @if (!string.IsNullOrEmpty(insertion.Prefix))
+                        {
+                            <span>[@insertion.Prefix]</span>
+                        }
+                    </td>
+
+                    <td title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</td>
+
+                    <td><a href="@insertion.Url" title="@insertion.Title" target="_blank">@insertion.BuildNumber</a></td>
+
+                    @if (editMode)
                     {
-                        <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
-                            style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
+                        <td>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">
+                                @if (insertion.Abandoning)
+                                {
+                                    @:Abandoning...
+                                }
+                                else
+                                {
+                                    @:Abandon
+                                }
+                            </button>
+                        </td>
                     }
-                </span>
 
-                @if (!string.IsNullOrEmpty(insertion.Prefix))
-                {
-                    <span title="Prefix" class="mx-1">[@insertion.Prefix]</span>
-                }
+                    @if (insertion.RpsSummary is null)
+                    {
+                        <td colspan="3">RPS not loaded</td>
+                    }
+                    else if (!insertion.RpsSummary.Loaded)
+                    {
+                        <td colspan="3">Loading RPS...</td>
+                    }
+                    else
+                    {
+                        var build = insertion.RpsSummary.BuildStatus.Display();
+                        <td title="Build: @build.Long">@build.Short</td>
+                        var ddrit = insertion.RpsSummary.Ddrit.Display();
+                        <td title="DDRIT: @ddrit.Long">@ddrit.Short</td>
+                        var speedometer = insertion.RpsSummary.Speedometer.Display();
+                        <td title="Speedometer: @speedometer.Long">@speedometer.Short</td>
+                    }
 
-                <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
+                    <td>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary"
+                                title="Fetch RPS and build status again">
+                            Refresh RPS
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
 
-                <a href="@insertion.Url" title="@insertion.Title" target="_blank">@insertion.BuildNumber</a>
-
-                <button class="btn btn-outline-secondary btn-sm" @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
-                @if (editMode)
-                {
-                    <button class="btn btn-outline-danger btn-sm ms-1" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
-                }
-
-                @if (insertion.Abandoning)
-                {
-                    @: Abandoning...
-                }
-
-                @if (insertion.RpsSummary is null)
-                {
-                    @: RPS not loaded
-                }
-                else if (!insertion.RpsSummary.Loaded)
-                {
-                    @: Loading RPS...
-                }
-                else
-                {
-                    var display = insertion.RpsSummary.Display;
-                    @(" ")
-                    <span title="@display.Long">@display.Short</span>
-                    @(" ")
-                }
-
-                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary">Refresh RPS</button>
-
-                @if (insertion.DisplayJson)
-                {
-                    <pre>@insertion.Json</pre>
-                }
-            </li>
-        }
-    </ol>
     <button class="btn btn-outline-secondary me-2" @onclick="LoadMoreAsync">Load more</button>
     @if (loading)
     {
@@ -351,7 +389,6 @@ else
     {
         private ParsedTitle? _parsedTitle;
 
-        public bool DisplayJson { get; set; }
         public bool Abandoning { get; private set; }
 
         public string PullRequestId => node["pullRequestId"]!.ToString();
@@ -359,7 +396,6 @@ else
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
         public ParsedTitle? ParsedTitle => (_parsedTitle ??= page.TitleParser.Parse(Title));
-        public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
         public string? Prefix
@@ -471,7 +507,7 @@ else
             {
                 // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-6.0&tabs=HTTP
                 var threadsJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests/{PullRequestId}/threads?api-version=6.0");
-                
+
                 // https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/evaluations/list?view=azure-devops-rest-6.0&tabs=HTTP
                 var checksJson = page.client.GetStringAsync($"https://dev.azure.com/devdiv/devdiv/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee/{PullRequestId}&api-version=6.0-preview.1");
 
