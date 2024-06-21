@@ -8,23 +8,24 @@ public class TitleParserTests
     public readonly record struct Entry(string Url, string Title);
 
     [Fact]
-    public void PrValidationWithPrefix()
+    public void PrValidation_01()
     {
         Verify(new()
             {
                 Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/532256",
                 Title = "[PR Validation] - ConcurrentCache Roslyn 'main/20240228.1' Insertion into main",
             }, """
-            Prefix: PR Validation
-            Repository: - ConcurrentCache Roslyn
+            Prefix: PR Validation - ConcurrentCache
+            Repository: Roslyn
             SourceBranch: main
             BuildNumber: 20240228.1
             TargetBranch: main
+            IsPr: true
             """);
     }
 
     [Fact]
-    public void PrValidation()
+    public void PrValidation_02()
     {
         Verify(new()
             {
@@ -36,6 +37,92 @@ public class TitleParserTests
             SourceBranch: main
             BuildNumber: 20240228.2
             TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_03()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/555595",
+            Title = "[PR Validation] Razor 'lspeditorfeaturedetector/20240604.3' Insertion into main",
+        }, """
+            Prefix: PR Validation
+            Repository: Razor
+            SourceBranch: lspeditorfeaturedetector
+            BuildNumber: 20240604.3
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_04()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/559658",
+            Title = "[PR Validation] Razor 'dev/jjonescz/remove-internal-runtime-support/20240621.3' Insertion into main",
+        }, """
+            Prefix: PR Validation
+            Repository: Razor
+            SourceBranch: dev/jjonescz/remove-internal-runtime-support
+            BuildNumber: 20240621.3
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_05()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/559658",
+            Title = "[PR Validation] Razor 'dev/jjonescz/remove-internal-runtime-support/20240621.3' Insertion into main",
+        }, """
+            Prefix: PR Validation
+            Repository: Razor
+            SourceBranch: dev/jjonescz/remove-internal-runtime-support
+            BuildNumber: 20240621.3
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_06()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/557091",
+            Title = "[PR Validation] - AsyncLazy Roslyn 'main/20240611.1' Insertion into main",
+        }, """
+            Prefix: PR Validation - AsyncLazy
+            Repository: Roslyn
+            SourceBranch: main
+            BuildNumber: 20240611.1
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_07()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/556259",
+            Title = "[PR Validation 73880] Roslyn 'main/20240606.3' Insertion into main",
+        }, """
+            Prefix: PR Validation 73880
+            Repository: Roslyn
+            SourceBranch: main
+            BuildNumber: 20240606.3
+            TargetBranch: main
+            IsPr: true
             """);
     }
 
