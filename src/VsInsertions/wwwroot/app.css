@@ -45,3 +45,7 @@ h1:focus {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+.table > :not(caption) > * > * {
+    padding: 0 0.2rem;
+}

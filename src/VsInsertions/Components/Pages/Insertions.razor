@@ -140,77 +140,106 @@ else
         </select>
     </div>
 
-    <ol class="mt-2">
-        @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
-        {
-            if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
-            (!displayPrs && insertion.Prefix == "PR") ||
-            (!displayDrafts && insertion.IsDraft) ||
-            (!displayInactive && insertion.Status != PullRequestStatus.Active))
-            {
-                continue;
-            }
-
-            <li value="@insertion.PullRequestId">
-                <span title="@insertion.Status">@StatusToEmoji(insertion.Status)</span>
-                <span title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</span>
-
-                <span style="margin-left: 0.1em; margin-right: 0.1em">
-                    @foreach (var review in insertion.Reviews)
-                    {
-                        <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
-                             style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
-                    }
-                </span>
-
-                @if (!string.IsNullOrEmpty(insertion.Prefix))
-                {
-                    <span title="Prefix" class="mx-1">[@insertion.Prefix]</span>
-                }
-
-                <span title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</span>
-
-                <a href="@insertion.Url" title="@insertion.Title" target="_blank">@insertion.BuildNumber</a>
-
-                <button class="btn btn-outline-secondary btn-sm" @onclick="() => insertion.DisplayJson = !insertion.DisplayJson">JSON</button>
+    <table class="table table-hover w-auto align-middle">
+        <thead>
+            <tr>
+                <th scope="col" title="PR number">PR #</th>
+                <th scope="col" title="PR status">S</th>
+                <th scope="col" title="Draft?">D</th>
+                <th scope="col" title="Reviewers">R</th>
+                <th scope="col" title="Title prefix">Prefix</th>
+                <th scope="col" title="Source branch">Source</th>
+                <th scope="col" title="Build number">Build #</th>
                 @if (editMode)
                 {
-                    <button class="btn btn-outline-danger btn-sm ms-1" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">Abandon</button>
+                    <th scope="col">Edit</th>
+                }
+                <th scope="col">Build</th>
+                <th scope="col">DDRIT</th>
+                <th scope="col">Speedometer</th>
+                <th scope="col"></th> @* Refresh RPS *@
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
+            {
+                if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
+                (!displayPrs && insertion.Prefix == "PR") ||
+                (!displayDrafts && insertion.IsDraft) ||
+                (!displayInactive && insertion.Status != PullRequestStatus.Active))
+                {
+                    continue;
                 }
 
-                @if (insertion.Abandoning)
-                {
-                    @: Abandoning...
-                }
+                <tr>
+                    <th scope="row" title="PR number">@insertion.PullRequestId</th>
+                    <td title="@insertion.Status">@StatusToEmoji(insertion.Status)</td>
+                    <td title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</td>
 
-                @if (insertion.RpsSummary is null)
-                {
-                    @: RPS not loaded
-                }
-                else if (!insertion.RpsSummary.Loaded)
-                {
-                    @: Loading RPS...
-                }
-                else
-                {
-                    var display = insertion.RpsSummary.Display;
-                    @(" ")
-                    <span title="@display.Long">@display.Short</span>
-                    @(" ")
-                }
+                    <td>
+                        @foreach (var review in insertion.Reviews)
+                        {
+                            <img src="@review.ImageUrl" title="@review.DisplayName: @review.Vote"
+                                 style="width: 1em; height: 1em; border: 0.1em solid @VoteToColor(review.Vote)" />
+                        }
+                    </td>
 
-                <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary"
-                        title="Fetch RPS and build status again">
-                    Refresh RPS
-                </button>
+                    <td title="Prefix">
+                        @if (!string.IsNullOrEmpty(insertion.Prefix))
+                        {
+                            <span>[@insertion.Prefix]</span>
+                        }
+                    </td>
 
-                @if (insertion.DisplayJson)
-                {
-                    <pre>@insertion.Json</pre>
-                }
-            </li>
-        }
-    </ol>
+                    <td title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</td>
+
+                    <td><a href="@insertion.Url" title="@insertion.Title" target="_blank">@insertion.BuildNumber</a></td>
+
+                    @if (editMode)
+                    {
+                        <td>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="insertion.AbandonAsync" disabled="@(insertion.Status != PullRequestStatus.Active)">
+                                @if (insertion.Abandoning)
+                                {
+                                    @:Abandoning...
+                                }
+                                else
+                                {
+                                    @:Abandon
+                                }
+                            </button>
+                        </td>
+                    }
+
+                    @if (insertion.RpsSummary is null)
+                    {
+                        <td colspan="3">RPS not loaded</td>
+                    }
+                    else if (!insertion.RpsSummary.Loaded)
+                    {
+                        <td colspan="3">Loading RPS...</td>
+                    }
+                    else
+                    {
+                        var build = insertion.RpsSummary.BuildStatus.Display();
+                        <td title="Build: @build.Long">@build.Short</td>
+                        var ddrit = insertion.RpsSummary.Ddrit.Display();
+                        <td title="DDRIT: @ddrit.Long">@ddrit.Short</td>
+                        var speedometer = insertion.RpsSummary.Speedometer.Display();
+                        <td title="Speedometer: @speedometer.Long">@speedometer.Short</td>
+                    }
+
+                    <td>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="insertion.RefreshRpsSummary"
+                                title="Fetch RPS and build status again">
+                            Refresh RPS
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
     <button class="btn btn-outline-secondary me-2" @onclick="LoadMoreAsync">Load more</button>
     @if (loading)
     {
@@ -360,7 +389,6 @@ else
     {
         private ParsedTitle? _parsedTitle;
 
-        public bool DisplayJson { get; set; }
         public bool Abandoning { get; private set; }
 
         public string PullRequestId => node["pullRequestId"]!.ToString();
@@ -368,7 +396,6 @@ else
         public string Url => $"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{PullRequestId}";
         public string Title => node["title"]!.ToString();
         public ParsedTitle? ParsedTitle => (_parsedTitle ??= page.TitleParser.Parse(Title));
-        public string Json => node.ToJsonString(new() { WriteIndented = true });
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
         public string? Prefix
