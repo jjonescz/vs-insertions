@@ -131,7 +131,7 @@ public static class RpsExtensions
     {
         if (status == null)
         {
-            return new("?", "Unknown");
+            return VsInsertions.Display.Unknown;
         }
 
         return status switch
@@ -142,7 +142,7 @@ public static class RpsExtensions
             PolicyEvaluationStatus.Rejected => new("✘", "Rejected"),
             PolicyEvaluationStatus.Broken => new("✘", "Broken"),
             PolicyEvaluationStatus.NotApplicable => new("N/A", "Not applicable"),
-            null => new("?", "Unknown"),
+            null => VsInsertions.Display.Unknown,
             { } s => unknown(s),
         };
 
@@ -188,4 +188,7 @@ public static class RpsExtensions
     }
 }
 
-public sealed record Display(string Short, string Long);
+public sealed record Display(string Short, string Long)
+{
+    public static Display Unknown { get; } = new("?", "Unknown");
+}
