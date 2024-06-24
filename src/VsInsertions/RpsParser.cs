@@ -100,7 +100,7 @@ public sealed class RpsParser
 
         static DateTimeOffset? tryGetExpirationDate(JsonNode buildCheck)
         {
-            if (DateTimeOffset.TryParseExact(buildCheck["context"]?["buildStartedUtc"]?.ToString(), "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out var buildStarted) &&
+            if (DateTimeOffset.TryParse(buildCheck["context"]?["buildStartedUtc"]?.ToString(), CultureInfo.InvariantCulture, out var buildStarted) &&
                 buildCheck["configuration"]?["settings"]?["validDuration"]?.GetValue<double>() is { } validDurationInMinutes)
             {
                 return buildStarted.AddMinutes(validDurationInMinutes);
