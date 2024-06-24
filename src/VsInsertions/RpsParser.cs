@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace VsInsertions;
@@ -87,19 +88,30 @@ public sealed class RpsParser
                 return null;
             }
 
-            if (!Enum.TryParse<PolicyEvaluationStatus>(buildCheck?["status"]?.ToString(), ignoreCase: true, out var result))
+            if (!Enum.TryParse<PolicyEvaluationStatus>(buildCheck["status"]?.ToString(), ignoreCase: true, out var result))
             {
                 return null;
             }
 
-            var isExpired = buildCheck?["context"]?["isExpired"]?.GetValue<bool>() == true;
+            var isExpired = buildCheck["context"]?["isExpired"]?.GetValue<bool>() == true;
 
-            return new BuildStatus(Status: result, IsExpired: isExpired);
+            return new BuildStatus(Status: result, IsExpired: isExpired, Expires: tryGetExpirationDate(buildCheck));
+        }
+
+        static DateTimeOffset? tryGetExpirationDate(JsonNode buildCheck)
+        {
+            if (DateTimeOffset.TryParseExact(buildCheck["context"]?["buildStartedUtc"]?.ToString(), "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out var buildStarted) &&
+                buildCheck["configuration"]?["settings"]?["validDuration"]?.GetValue<int>() is { } validDurationInMinutes)
+            {
+                return buildStarted.AddMinutes(validDurationInMinutes);
+            }
+
+            return null;
         }
     }
 }
 
-public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired);
+public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires);
 
 public sealed class RpsSummary
 {
@@ -162,7 +174,7 @@ public static class RpsExtensions
         var statusDisplay = status.Status.Display();
         return new(
             status.IsExpired ? "E" : statusDisplay.Short,
-            status.IsExpired ? $"Expired ({statusDisplay.Long})" : statusDisplay.Long);
+            status.IsExpired ? $"Expired ({statusDisplay.Long})" : $"{statusDisplay.Long} (expires {status.Expires:O})");
     }
 
     public static Display Display(this PolicyEvaluationStatus status)

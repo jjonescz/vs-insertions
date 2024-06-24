@@ -565,10 +565,11 @@ public class RpsParserTests
         }, """
             BuildStatus:
               Status: Rejected
+              Expires: 2024-06-21T03:13:15.5036803+00:00
             Display:
               Short: Build: ✘, DDRIT: N/A, Speedometer: N/A
               Long:
-                Build: Rejected
+                Build: Rejected (expires 2024-06-21T03:13:15.5036803+00:00)
                 DDRIT: Not started
                 Speedometer: Not started
             """);
@@ -657,6 +658,7 @@ public class RpsParserTests
             BuildStatus:
               Status: Queued
               IsExpired: true
+              Expires: 2024-06-24T01:08:47.3364673+00:00
             Display:
               Short: Build: E, DDRIT: N/A, Speedometer: N/A
               Long:
