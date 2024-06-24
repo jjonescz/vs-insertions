@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace VsInsertions;
@@ -34,13 +35,25 @@ public sealed class RpsParser
             var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() is "VSEng Perf Automation Account" or "VSEngPerfManager" or "VSEng-PIT-Backend").LastOrDefault();
             if (latestComment == null)
             {
-                return new RpsRun(Finished: false, Regressions: 0, BrokenTests: 0);
+                return new RpsRun(Regressions: 0, BrokenTests: 0);
             }
+
+            var flags = RpsRunFlags.Finished;
 
             var latestText = latestComment["content"]!.ToString();
             if (latestText.Contains("Test Run **PASSED**"))
             {
-                return new RpsRun(Finished: true, Regressions: 0, BrokenTests: 0);
+                return new RpsRun(Regressions: 0, BrokenTests: 0, Flags: flags);
+            }
+
+            if (latestText.Contains("no baseline", StringComparison.OrdinalIgnoreCase))
+            {
+                flags |= RpsRunFlags.MissingBaseline;
+            }
+
+            if (latestText.Contains("infrastructure issue", StringComparison.OrdinalIgnoreCase))
+            {
+                flags |= RpsRunFlags.InfraIssue;
             }
 
             var regressions = tryGetCount(latestText, "regression");
@@ -51,7 +64,7 @@ public sealed class RpsParser
                 regressions = 0;
             }
 
-            return new RpsRun(Finished: true, Regressions: regressions, BrokenTests: brokenTests);
+            return new RpsRun(Regressions: regressions, BrokenTests: brokenTests, Flags: flags);
         }
 
         static int tryGetCount(string text, string label)
@@ -75,19 +88,30 @@ public sealed class RpsParser
                 return null;
             }
 
-            if (!Enum.TryParse<PolicyEvaluationStatus>(buildCheck?["status"]?.ToString(), ignoreCase: true, out var result))
+            if (!Enum.TryParse<PolicyEvaluationStatus>(buildCheck["status"]?.ToString(), ignoreCase: true, out var result))
             {
                 return null;
             }
 
-            var isExpired = buildCheck?["context"]?["isExpired"]?.GetValue<bool>() == true;
+            var isExpired = buildCheck["context"]?["isExpired"]?.GetValue<bool>() == true;
 
-            return new BuildStatus(Status: result, IsExpired: isExpired);
+            return new BuildStatus(Status: result, IsExpired: isExpired, Expires: tryGetExpirationDate(buildCheck));
+        }
+
+        static DateTimeOffset? tryGetExpirationDate(JsonNode buildCheck)
+        {
+            if (DateTimeOffset.TryParseExact(buildCheck["context"]?["buildStartedUtc"]?.ToString(), "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out var buildStarted) &&
+                buildCheck["configuration"]?["settings"]?["validDuration"]?.GetValue<double>() is { } validDurationInMinutes)
+            {
+                return buildStarted.AddMinutes(validDurationInMinutes);
+            }
+
+            return null;
         }
     }
 }
 
-public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired);
+public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires);
 
 public sealed class RpsSummary
 {
@@ -127,7 +151,16 @@ public enum PolicyEvaluationStatus
     NotApplicable,
 }
 
-public sealed record RpsRun(bool Finished, int Regressions, int BrokenTests);
+[Flags]
+public enum RpsRunFlags
+{
+    None = 0,
+    Finished = 1 << 0,
+    MissingBaseline = 1 << 1,
+    InfraIssue = 1 << 2,
+}
+
+public sealed record RpsRun(int Regressions, int BrokenTests, RpsRunFlags Flags = RpsRunFlags.None);
 
 public static class RpsExtensions
 {
@@ -141,7 +174,7 @@ public static class RpsExtensions
         var statusDisplay = status.Status.Display();
         return new(
             status.IsExpired ? "E" : statusDisplay.Short,
-            status.IsExpired ? $"Expired ({statusDisplay.Long})" : statusDisplay.Long);
+            status.IsExpired ? $"Expired ({statusDisplay.Long})" : $"{statusDisplay.Long} (expires {status.Expires:O})");
     }
 
     public static Display Display(this PolicyEvaluationStatus status)
@@ -171,13 +204,23 @@ public static class RpsExtensions
             return new("N/A", "Not started");
         }
 
-        if (!run.Finished)
+        if (!run.Flags.HasFlag(RpsRunFlags.Finished))
         {
             return new("...", "Running");
         }
 
         if (run.Regressions == -1 && run.BrokenTests == -1)
         {
+            if (run.Flags.HasFlag(RpsRunFlags.MissingBaseline))
+            {
+                return new("B", "Missing baseline");
+            }
+
+            if (run.Flags.HasFlag(RpsRunFlags.InfraIssue))
+            {
+                return new("I", "Infrastructure issue");
+            }
+
             return new("?", "Unknown result");
         }
 
