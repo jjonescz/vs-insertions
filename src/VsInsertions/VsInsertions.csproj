@@ -7,4 +7,10 @@
     <UserSecretsId>ae3ea2d0-4a3c-4e57-8343-2e555074a60b</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Identity.Web" Version="2.20.0" />
+    <PackageReference Include="Microsoft.Identity.Web.DownstreamApi" Version="2.20.0" />
+    <PackageReference Include="Microsoft.Identity.Web.UI" Version="2.20.0" />
+  </ItemGroup>
+
 </Project>

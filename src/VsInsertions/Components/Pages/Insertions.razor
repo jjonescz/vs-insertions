@@ -1,11 +1,18 @@
 ﻿@page "/"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.DataProtection
+@using Microsoft.Identity.Abstractions
+@using Microsoft.Identity.Web
 @using System.Text.Json.Nodes
 @using System.Text.Json
 @using System.Runtime.InteropServices
 @using System.Text.RegularExpressions
 @using System.Web
 @rendermode RenderMode.InteractiveServer
+@attribute [Authorize]
+@inject IAuthorizationHeaderProvider AuthorizationHeaderProvider
+@inject MicrosoftIdentityConsentAndConditionalAccessHandler ConsentHandler
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
@@ -17,6 +24,10 @@
 <PageTitle>Insertions</PageTitle>
 
 <h1>Insertions</h1>
+
+<AuthorizeView>
+    <p>Hello, @context.User.Identity?.Name</p>
+</AuthorizeView>
 
 @if (!browser)
 {
@@ -286,13 +297,29 @@ else
     private readonly Dictionary<string, RpsSummary> rpsSummaries = new();
     private string? errorHtml;
 
+    [CascadingParameter]
+    public required Task<AuthenticationState> AuthenticationState { get; set; }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            var encryptedAccessToken = await JSRuntime.InvokeAsync<string>("getAccessTokenCookie");
-            accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
-                DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
+            //var encryptedAccessToken = await JSRuntime.InvokeAsync<string>("getAccessTokenCookie");
+            //accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
+            //    DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
+            var user = (await AuthenticationState)?.User;
+            if (user is not null)
+            {
+                try
+                {
+                    // TODO: Rename to authorizationHeader.
+                    accessToken = await AuthorizationHeaderProvider.CreateAuthorizationHeaderForUserAsync(["user.read", "https://app.vssps.visualstudio.com/vso.code"], claimsPrincipal: user);
+                }
+                catch (MicrosoftIdentityWebChallengeUserException ex)
+                {
+                    ConsentHandler.HandleException(ex);
+                }
+            }
             browser = true;
             StateHasChanged();
 
@@ -314,7 +341,7 @@ else
         StateHasChanged();
 
         client.DefaultRequestHeaders.Remove("Authorization");
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+        client.DefaultRequestHeaders.Add("Authorization", accessToken);
 
         await LoadMoreAsync();
     }

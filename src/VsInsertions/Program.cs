@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 using System.Text.Json.Nodes;
 using VsInsertions;
 using VsInsertions.Components;
@@ -7,8 +10,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    .AddMicrosoftIdentityConsentHandler();
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
+
+builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApp(builder.Configuration)
+    .EnableTokenAcquisitionToCallDownstreamApi()
+    .AddInMemoryTokenCaches();
+builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddSingleton<TitleParser>();
 builder.Services.AddSingleton<RpsParser>();
@@ -27,6 +39,9 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfiguration configuration, IDataProtectionProvider dataProtectionProvider) =>
 {
@@ -63,5 +78,7 @@ app.MapGet("/oauth/callback", async (HttpContext context, string code, IConfigur
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+app.MapControllers();
 
 app.Run();
