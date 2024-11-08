@@ -127,6 +127,40 @@ public class TitleParserTests
     }
 
     [Fact]
+    public void PrValidation_08()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/591017",
+            Title = "[Validation] Roslyn 'release/vscode/20241107.6' Insertion into main",
+        }, """
+            Prefix: Validation
+            Repository: Roslyn
+            SourceBranch: release/vscode
+            BuildNumber: 20241107.6
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_09()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/563748",
+            Title = "[Smart Rename Context Validation] Roslyn 'main/20240709.2' Insertion into main",
+        }, """
+            Prefix: Smart Rename Context Validation
+            Repository: Roslyn
+            SourceBranch: main
+            BuildNumber: 20240709.2
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
     public void DualInsertion_01()
     {
         Verify(new()

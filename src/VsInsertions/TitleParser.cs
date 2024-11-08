@@ -1,17 +1,20 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Buffers;
+using System.Text.RegularExpressions;
 
 namespace VsInsertions;
 
 public readonly record struct ParsedTitle(string Prefix, string Repository, string SourceBranch, string BuildNumber, string TargetBranch)
 {
-    public bool IsPr => Prefix.Contains("PR", StringComparison.OrdinalIgnoreCase);
+    private static readonly SearchValues<string> prSearchValues = SearchValues.Create(["PR", "Validation"], StringComparison.OrdinalIgnoreCase);
+
+    public bool IsPr => Prefix.AsSpan().ContainsAny(prSearchValues);
 }
 
 public sealed partial class TitleParser
 {
     public ParsedTitle? Parse(string title)
     {
-        if (TitleRegex().Match(title) is { Success: true } match)
+        if (TitleRegex.Match(title) is { Success: true } match)
         {
             var prefix2 = match.Groups["prefix2"].Value;
             var suffix = match.Groups["suffix"].Value;
@@ -29,5 +32,5 @@ public sealed partial class TitleParser
     }
 
     [GeneratedRegex(@"^\[(?<prefix>[^]]+)\]( - (?<prefix2>[^ ]+))? (?<repo>.*) '(?<source>[^']+)/(?<build>[\d.]+)' (?<suffix>.*)Insertion into (?<target>.*)$", RegexOptions.Compiled)]
-    private static partial Regex TitleRegex();
+    private static partial Regex TitleRegex { get; }
 }
