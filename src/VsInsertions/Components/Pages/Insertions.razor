@@ -24,23 +24,39 @@
 }
 else
 {
-    var config = Configuration.GetSection("AzureDevOpsOAuth");
-    // https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/azure-devops-oauth?view=azure-devops#2-authorize-your-app
-    var authorizeUrl = new UriBuilder("https://app.vssps.visualstudio.com/oauth2/authorize");
-    var query = HttpUtility.ParseQueryString(string.Empty);
-    query.Add("client_id", config.GetValue<string>("AppId"));
-    query.Add("response_type", "Assertion");
-    query.Add("scope", "vso.code_write vso.threads_full");
-    query.Add("redirect_uri", NavigationManager.ToAbsoluteUri("/oauth/callback").ToString());
-    authorizeUrl.Query = query.ToString();
+    <div class="my-2">
+        @if (string.IsNullOrEmpty(accessToken))
+        {
+            <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <input type="password" class="form-control" placeholder="PAT" @bind="accessTokenInput" />
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary" @onclick="LogInAsync">Log In</button>
+                </div>
+            </div>
 
-    <a href="@authorizeUrl" class="me-2">@(string.IsNullOrEmpty(accessToken) ? "Authorize" : "Re-authorize")</a>
-    <a href="https://app.vsaex.visualstudio.com/me" class="me-2" target="_blank"
-       title="You can revoke this app's access there">Manage your authorizations</a>
+            <details class="my-2">
+                <summary>How do I get the PAT?</summary>
 
-    if (!string.IsNullOrEmpty(accessToken))
-    {
-        <div class="my-2">
+                <p>
+                    The simplest way is to use the
+                    <a href="https://dev.azure.com/dnceng/public/_artifacts/feed/dotnet-eng/NuGet/Microsoft.DncEng.PatGeneratorTool" target="_blank">PatGeneratorTool</a>:
+                </p>
+                <ol>
+                    <li>
+                        <pre><code>dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease</code></pre>
+                    </li>
+                    <li>
+                        <pre><code>pat-generator --scopes code_write --organizations devdiv --expires-in 7</code></pre>
+                    </li>
+                </ol>
+            </details>
+        }
+        else
+        {
+            <button type="submit" class="btn btn-outline-primary me-2" @onclick="LogOutAsync">Log Out</button>
+
             <select class="form-select d-inline-block w-auto" @bind="statusFilter">
                 <option value="@StatusFilter.All">All</option>
                 <option value="@StatusFilter.Active">Only active</option>
@@ -64,15 +80,15 @@ else
             {
                 @: Loading...
             }
-        </div>
-    }
+        }
+    </div>
 }
 
 @if (!started || errorHtml != null)
 {
     if (errorHtml != null)
     {
-        <p>⚠️ An error occurred. You may need to re-authorize the app. This is the HTML response returned:</p>
+        <p>⚠️ An error occurred. You may need to log in again. This is the HTML response returned:</p>
         <iframe srcdoc="@errorHtml"></iframe>
     }
 }
@@ -261,6 +277,10 @@ else
         }
         return "";
     }
+
+    function setAccessTokenCookie(value) {
+        document.cookie = "access_token=" + value + ";secure;samesite=strict"
+    }
 </script>
 
 @code {
@@ -269,6 +289,7 @@ else
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
     private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&searchCriteria.reviewerId=6c25b447-1d90-4840-8fde-d8b22cb8733e&api-version=6.0";
 
+    private string? accessTokenInput;
     private string? accessToken;
     private HttpClient client = new HttpClient();
     private bool browser;
@@ -291,14 +312,43 @@ else
         if (firstRender)
         {
             var encryptedAccessToken = await JSRuntime.InvokeAsync<string>("getAccessTokenCookie");
-            accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
-                DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
+
+            try
+            {
+                accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
+                    DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                accessToken = null;
+            }
+
             browser = true;
             StateHasChanged();
 
             await StartAsync();
             StateHasChanged();
         }
+    }
+
+    private async Task LogInAsync()
+    {
+        if (string.IsNullOrEmpty(accessTokenInput))
+        {
+            return;
+        }
+
+        var encryptedAccessToken = DataProtectionProvider.CreateProtector("access_token").Protect(accessTokenInput);
+        await JSRuntime.InvokeVoidAsync("setAccessTokenCookie", encryptedAccessToken);
+        accessToken = accessTokenInput;
+        accessTokenInput = null;
+    }
+
+    private async Task LogOutAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("setAccessTokenCookie", "");
+        accessToken = null;
     }
 
     private async Task StartAsync()
