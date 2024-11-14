@@ -57,7 +57,7 @@ else
         {
             <button type="submit" class="btn btn-outline-primary me-2" @onclick="LogOutAsync">Log Out</button>
 
-            <select class="form-select d-inline-block w-auto" @bind="statusFilter">
+            <select class="form-select d-inline-block w-auto me-1" @bind="statusFilter">
                 <option value="@StatusFilter.All">All</option>
                 <option value="@StatusFilter.Active">Only active</option>
             </select>
@@ -119,9 +119,14 @@ else
         Load @numberOfRecentRpsToLoad next recent RPS data
     </button>
 
-    <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadRps()"
+    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => LoadRps()"
             title="Loads RPS/build status for all loaded PRs with not-yet-loaded RPS/build status">
         Load all RPS data
+    </button>
+
+    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="RefreshRps"
+            title="Fetches RPS and build status again of PRs with previously-loaded RPS/build status">
+        Refresh loaded RPS data
     </button>
 
     <div class="my-2">
@@ -430,6 +435,20 @@ else
                 if (count >= max)
                 {
                     break;
+                }
+            }
+        }
+    }
+
+    private void RefreshRps()
+    {
+        if (insertions != null)
+        {
+            foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
+            {
+                if (insertion.RpsSummary != null)
+                {
+                    insertion.RefreshRpsSummary();
                 }
             }
         }
