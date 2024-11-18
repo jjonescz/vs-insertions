@@ -89,7 +89,7 @@ else
     if (errorHtml != null)
     {
         <p>⚠️ An error occurred. You may need to log in again. This is the HTML response returned:</p>
-        <iframe srcdoc="@errorHtml"></iframe>
+        <iframe srcdoc="@errorHtml" style="width: 100%; height: 70vh"></iframe>
     }
 }
 else if (insertions == null)
@@ -348,6 +348,8 @@ else
         await JSRuntime.InvokeVoidAsync("setAccessTokenCookie", encryptedAccessToken);
         accessToken = accessTokenInput;
         accessTokenInput = null;
+        errorHtml = null;
+        started = false;
     }
 
     private async Task LogOutAsync()
@@ -383,17 +385,21 @@ else
             var skip = insertions?.Length ?? 0;
             var url = listUrl + "&searchCriteria.status=" + statusFilter.ToString().ToLowerInvariant() + "&$top=100&$skip=" + skip;
             Console.WriteLine(url);
-            var response = await client.GetStringAsync(url);
+            var response = await client.GetAsync(url);
             Console.WriteLine("Loaded");
 
+            string? responseText = null;
             JsonNode? node;
             try
             {
-                node = JsonNode.Parse(response);
+                responseText = await response.Content.ReadAsStringAsync();
+                response.EnsureSuccessStatusCode();
+                node = JsonNode.Parse(responseText);
             }
-            catch
+            catch (Exception ex)
             {
-                errorHtml = response;
+                Console.WriteLine(ex);
+                errorHtml = responseText ?? ex.ToString();
                 return;
             }
 
