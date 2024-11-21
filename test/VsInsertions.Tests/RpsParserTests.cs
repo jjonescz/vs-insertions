@@ -668,6 +668,241 @@ public class RpsParserTests
             """);
     }
 
+    [Fact]
+    public void ScopedSpeedometer()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/594020",
+            Threads = """
+            {
+                "pullRequestThreadContext": null,
+                "id": 7103615,
+                "publishedDate": "2024-11-21T03:18:36.473Z",
+                "lastUpdatedDate": "2024-11-21T09:45:31.687Z",
+                "comments": [
+                    {
+                        "id": 1,
+                        "parentCommentId": 0,
+                        "author": {
+                            "displayName": "DevDiv Build Service (devdiv)",
+                            "url": "https://example.com",
+                            "_links": {
+                                "avatar": {
+                                    "href": "https://example.com"
+                                }
+                            },
+                            "id": "6d3b3c1a-123d-454c-a78b-b4a426164711",
+                            "uniqueName": "",
+                            "imageUrl": "https://example.com"
+                        },
+                        "content": "###We've started Speedometer\r\n[Learn more about Speedometer](https://example.com)\r\n[Update 1](https://dev.azure.com/DevDiv/DevDiv/_git/VS/pullrequest/594020?_a=files&iteration=1&base=0)\r\n>\r\n>\r\n>:clock2: ETA 02:23 PM GMT *(around 11 hours)*\r\n>:floppy_disk: [Install your build](https://example.com)\r\n>\r\n>:rocket: [View Test Pipeline](https://example.com)\r\n### There are no active outages which may impact Speedometer\n\r\n\n&nbsp;&nbsp;&nbsp;[View Active Outages](https://example.com)\n\r\n",
+                        "publishedDate": "2024-11-21T03:18:36.473Z",
+                        "lastUpdatedDate": "2024-11-21T03:18:36.473Z",
+                        "lastContentUpdatedDate": "2024-11-21T03:18:36.473Z",
+                        "commentType": "text",
+                        "usersLiked": [],
+                        "_links": {
+                            "self": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103615/comments/1"
+                            },
+                            "repository": {
+                                "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            },
+                            "threads": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103615"
+                            },
+                            "pullRequests": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/pullRequests/594020"
+                            }
+                        }
+                    },
+                    {
+                        "id": 2,
+                        "parentCommentId": 0,
+                        "author": {
+                            "displayName": "VSEng-PIT-Backend",
+                            "url": "https://example.com",
+                            "_links": {
+                                "avatar": {
+                                    "href": "https://example.com"
+                                }
+                            },
+                            "id": "c7965a43-7b7a-6e71-a8d0-274bdbcbc36a",
+                            "uniqueName": "",
+                            "imageUrl": "https://example.com"
+                        },
+                        "content": "## :x: Test Run **FAILED**\r\n> There was 1 regression, please review the results below.\r\n<li><a href=\"https://example.com\">Known Noise and Broken Test Issues</a></li>\r\n\r\n---\r\n## 🕳 [View Performance Details on PIT](https://example.com)\r\n\r\nPR build [35520.184.dn-bot.241121.092831.594020](https://example.com)\r\nVS. *Baseline* CI build *main*-[35520.184](https://example.com)\r\n> Performance results from [Target run](https://example.com)\r\n> and [Baseline run](https://example.com)\r\n\r\n---\r\n## :triangular_flag_on_post: Regressions\r\n\r\n| Found in | Details | Next steps |\r\n| :---- | :---- | :---- |\r\n| CPlusPlusWithCache.UnrealEngine52<li>0850.Change Solution Configuration - Warm <ul><li><a href=\"https://example.com\" target=\"_blank\">Duration_TotalElapsedTime</a></li></ul></li> | Regressed: 1,241 ms (26.87%) | [🕳 View it in PIT](https://example.com)<br />[:open_file_folder: Open test outputs](https://example.com)<br />[:chart_with_upwards_trend: Compare in PerfView](https://example.com) |\r\n\r\n\r\n\r\n---\r\n<details> \r\n<summary>🤔 How to...</summary>\r\n<li> <a href=\"https://example.com\">Investigate Broken Tests Issues</a><br /> </li>\r\n<li> <a href=\"https://example.com\">Investigate Performance Regressions issues</a><br /> </li>\r\n</details> <br />\r\n\r\n\r\n",
+                        "publishedDate": "2024-11-21T09:45:31.687Z",
+                        "lastUpdatedDate": "2024-11-21T09:45:31.687Z",
+                        "lastContentUpdatedDate": "2024-11-21T09:45:31.687Z",
+                        "usersLiked": [],
+                        "_links": {
+                            "self": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103615/comments/2"
+                            },
+                            "repository": {
+                                "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            },
+                            "threads": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103615"
+                            },
+                            "pullRequests": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/pullRequests/594020"
+                            }
+                        }
+                    }
+                ],
+                "status": "active",
+                "threadContext": null,
+                "properties": {
+                    "RunIdentifier": {
+                        "$type": "System.String",
+                        "$value": "RPS-Speedometer-14760-10593388-1"
+                    },
+                    "BuildId": {
+                        "$type": "System.Int32",
+                        "$value": 10593388
+                    },
+                    "DefinitionId": {
+                        "$type": "System.Int32",
+                        "$value": 14760
+                    }
+                },
+                "identities": null,
+                "isDeleted": false,
+                "_links": {
+                    "self": {
+                        "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103615"
+                    },
+                    "repository": {
+                        "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                    }
+                }
+            },
+            {
+                "pullRequestThreadContext": null,
+                "id": 7103622,
+                "publishedDate": "2024-11-21T03:21:01.92Z",
+                "lastUpdatedDate": "2024-11-21T07:50:20.23Z",
+                "comments": [
+                    {
+                        "id": 1,
+                        "parentCommentId": 0,
+                        "author": {
+                            "displayName": "DevDiv Build Service (devdiv)",
+                            "url": "https://example.com",
+                            "_links": {
+                                "avatar": {
+                                    "href": "https://example.com"
+                                }
+                            },
+                            "id": "6d3b3c1a-123d-454c-a78b-b4a426164711",
+                            "uniqueName": "",
+                            "imageUrl": "https://example.com"
+                        },
+                        "content": "###We've started Speedometer-Scoped for Roslyn Insertion\r\n[Update 1](https://dev.azure.com/DevDiv/DevDiv/_git/VS/pullrequest/594020?_a=files&iteration=1&base=0)\r\n>\r\n>\r\n>:clock2: ETA 08:58 AM GMT *(around 6 hours)*\r\n>:floppy_disk: [Install your build](https://example.com)\r\n>\r\n>:rocket: [View Test Pipeline](https://example.com)\r\n### There are no active outages which may impact Speedometer-Scoped for Roslyn Insertion\n\r\n\n&nbsp;&nbsp;&nbsp;[View Active Outages](https://example.com)\n\r\n",
+                        "publishedDate": "2024-11-21T03:21:01.92Z",
+                        "lastUpdatedDate": "2024-11-21T03:21:01.92Z",
+                        "lastContentUpdatedDate": "2024-11-21T03:21:01.92Z",
+                        "commentType": "text",
+                        "usersLiked": [],
+                        "_links": {
+                            "self": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103622/comments/1"
+                            },
+                            "repository": {
+                                "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            },
+                            "threads": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103622"
+                            },
+                            "pullRequests": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/pullRequests/594020"
+                            }
+                        }
+                    },
+                    {
+                        "id": 2,
+                        "parentCommentId": 0,
+                        "author": {
+                            "displayName": "VSEng-PIT-Backend",
+                            "url": "https://example.com",
+                            "_links": {
+                                "avatar": {
+                                    "href": "https://example.com"
+                                }
+                            },
+                            "id": "c7965a43-7b7a-6e71-a8d0-274bdbcbc36a",
+                            "uniqueName": "",
+                            "imageUrl": "https://example.com"
+                        },
+                        "content": "## :heavy_check_mark: Test Run **PASSED**\r\n> > There were no test failures or performance regressions\r\n\r\n---\r\n## 🕳 [View Performance Details on PIT](https://example.com)\r\n\r\nPR build [35520.184.dn-bot.241121.071622.594020](https://example.com)\r\nVS. *Baseline* CI build *main*-[35520.160](https://example.com)\r\n> Performance results from [Target run](https://example.com)\r\n> and [Baseline run](https://example.com)\r\n\r\n:warning: Using a 'Last Known Good' baseline run.\r\n> For more information about this [click here](https://example.com)\r\n\r\n---\r\n\r\n---\r\n<details> \r\n<summary>🤔 How to...</summary>\r\n<li> <a href=\"https://example.com\">Investigate Broken Tests Issues</a><br /> </li>\r\n<li> <a href=\"https://example.com\">Investigate Performance Regressions issues</a><br /> </li>\r\n</details> <br />\r\n\r\n\r\n",
+                        "publishedDate": "2024-11-21T07:49:21.837Z",
+                        "lastUpdatedDate": "2024-11-21T07:49:21.837Z",
+                        "lastContentUpdatedDate": "2024-11-21T07:49:21.837Z",
+                        "usersLiked": [],
+                        "_links": {
+                            "self": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103622/comments/2"
+                            },
+                            "repository": {
+                                "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            },
+                            "threads": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103622"
+                            },
+                            "pullRequests": {
+                                "href": "https://dev.azure.com/devdiv/_apis/git/pullRequests/594020"
+                            }
+                        }
+                    }
+                ],
+                "status": "closed",
+                "threadContext": null,
+                "properties": {
+                    "RunIdentifier": {
+                        "$type": "System.String",
+                        "$value": "RPS-Speedometer-21995-10593411-1"
+                    },
+                    "BuildId": {
+                        "$type": "System.Int32",
+                        "$value": 10593411
+                    },
+                    "DefinitionId": {
+                        "$type": "System.Int32",
+                        "$value": 21995
+                    }
+                },
+                "identities": null,
+                "isDeleted": false,
+                "_links": {
+                    "self": {
+                        "href": "https://dev.azure.com/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullRequests/594020/threads/7103622"
+                    },
+                    "repository": {
+                        "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                    }
+                }
+            }
+            """,
+        }, """
+            SpeedometerScoped:
+              Flags: Finished
+            Speedometer:
+              Regressions: 1
+              BrokenTests: -1
+              Flags: Finished
+            Display:
+              Short: Build: ?, DDRIT: N/A, Speedometer-Scoped: 0, Speedometer: 1
+              Long:
+                Build: Unknown
+                DDRIT: Not started
+                Speedometer-Scoped: Regressions: 0
+                Speedometer: Regressions: 1
+            """);
+    }
+
     [InlineSnapshotAssertion(parameterName: nameof(expected))]
     private static void Verify(Entry input, string? expected = null, [CallerFilePath] string? filePath = null, [CallerLineNumber] int lineNumber = -1)
     {
