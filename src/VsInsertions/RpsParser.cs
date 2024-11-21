@@ -22,7 +22,8 @@ public sealed class RpsParser
 
         rpsSummary.BuildStatus = getBuildStatus(checksJson);
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
-        rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer");
+        rpsSummary.SpeedometerScoped = getRunResults(threads, "We've started Speedometer-Scoped");
+        rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer\r");
 
         static RpsRun? getRunResults(JsonArray threads, string text)
         {
@@ -118,6 +119,7 @@ public sealed class RpsSummary
     public bool Loaded { get; set; }
     public BuildStatus? BuildStatus { get; set; }
     public RpsRun? Ddrit { get; set; }
+    public RpsRun? SpeedometerScoped { get; set; }
     public RpsRun? Speedometer { get; set; }
 
     public Display Display
@@ -128,12 +130,13 @@ public sealed class RpsSummary
             {
                 ("Build", BuildStatus.Display()),
                 ("DDRIT", Ddrit.Display()),
-                ("Speedometer", Speedometer.Display())
+                ("Speedometer-Scoped", SpeedometerScoped?.Display()),
+                ("Speedometer", Speedometer.Display()),
             };
 
             return new(
-                string.Join(", ", displays.Select(d => $"{d.Item1}: {d.Item2.Short}")),
-                string.Join("\n", displays.Select(d => $"{d.Item1}: {d.Item2.Long}")));
+                string.Join(", ", displays.Where(d => d.Item2 != null).Select(d => $"{d.Item1}: {d.Item2!.Short}")),
+                string.Join("\n", displays.Where(d => d.Item2 != null).Select(d => $"{d.Item1}: {d.Item2!.Long}")));
         }
     }
 }
