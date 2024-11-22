@@ -1077,11 +1077,20 @@ public class RpsParserTests
             DesktopValidationStatus:
               Status: Rejected
               Expires: 2024-11-24T22:25:44.7207165+00:00
+              OutputPreview:
+                C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\Microsoft.Win32.Primitives.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7ce...
+                C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\System.AppContext.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7...
+                C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\System.Buffers.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798...
             Display:
               Short: Build: ✔, DesktopValidation: ✘, DDRIT: N/A, Speedometer: N/A
               Long:
                 Build: Approved (expires 2024-11-24T22:25:35.8450886+00:00)
                 DesktopValidation: Rejected (expires 2024-11-24T22:25:44.7207165+00:00)
+
+                Output preview:
+                C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\Microsoft.Win32.Primitives.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7ce...
+                C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\System.AppContext.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7...
+                C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\System.Buffers.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798...
                 DDRIT: Not started
                 Speedometer: Not started
             """);

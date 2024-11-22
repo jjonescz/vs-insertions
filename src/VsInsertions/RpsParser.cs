@@ -97,7 +97,10 @@ public sealed class RpsParser
 
             var isExpired = buildCheck["context"]?["isExpired"]?.GetValue<bool>() == true;
 
-            return new BuildStatus(Status: result, IsExpired: isExpired, Expires: tryGetExpirationDate(buildCheck));
+            var outputPreviewEntries = buildCheck["context"]?["buildOutputPreview"]?["errors"]?.AsArray().Select(x => x?["message"]?.ToString());
+            var outputPreview = outputPreviewEntries is null ? null : string.Join("\n", outputPreviewEntries);
+
+            return new BuildStatus(Status: result, IsExpired: isExpired, Expires: tryGetExpirationDate(buildCheck), OutputPreview: outputPreview);
         }
 
         static DateTimeOffset? tryGetExpirationDate(JsonNode buildCheck)
@@ -113,7 +116,7 @@ public sealed class RpsParser
     }
 }
 
-public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires);
+public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires, string? OutputPreview);
 
 public sealed class RpsSummary
 {
@@ -178,9 +181,15 @@ public static class RpsExtensions
         }
 
         var statusDisplay = status.Status.Display();
-        return new(
-            status.IsExpired ? "E" : statusDisplay.Short,
-            status.IsExpired ? $"Expired ({statusDisplay.Long})" : $"{statusDisplay.Long} (expires {status.Expires:O})");
+        var shortText = status.IsExpired ? "E" : statusDisplay.Short;
+        var longText = status.IsExpired ? $"Expired ({statusDisplay.Long})" : $"{statusDisplay.Long} (expires {status.Expires:O})";
+
+        if (status.OutputPreview != null)
+        {
+            longText += $"\n\nOutput preview:\n{status.OutputPreview}";
+        }
+
+        return new(shortText, longText);
     }
 
     public static Display Display(this PolicyEvaluationStatus status)
