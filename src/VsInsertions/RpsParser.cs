@@ -20,7 +20,8 @@ public sealed class RpsParser
         var threadsNode = JsonNode.Parse(threadsJson);
         var threads = threadsNode!["value"]!.AsArray();
 
-        rpsSummary.BuildStatus = getBuildStatus(checksJson);
+        rpsSummary.BuildStatus = getBuildStatus(checksJson, "CloudBuild");
+        rpsSummary.DesktopValidationStatus = getBuildStatus(checksJson, "Desktop Validation");
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
         rpsSummary.SpeedometerScoped = getRunResults(threads, "We've started Speedometer-Scoped");
         rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer\r");
@@ -79,11 +80,11 @@ public sealed class RpsParser
             return result;
         }
 
-        static BuildStatus? getBuildStatus(string checksJson)
+        static BuildStatus? getBuildStatus(string checksJson, string checkTitle)
         {
             var checksNode = JsonNode.Parse(checksJson);
             var checks = checksNode!["value"]!.AsArray();
-            var buildCheck = checks.Where(x => x?["configuration"]?["settings"]?["displayName"]?.ToString().Contains("CloudBuild", StringComparison.OrdinalIgnoreCase) == true).FirstOrDefault();
+            var buildCheck = checks.Where(x => x?["configuration"]?["settings"]?["displayName"]?.ToString().Contains(checkTitle, StringComparison.OrdinalIgnoreCase) == true).FirstOrDefault();
             if (buildCheck == null)
             {
                 return null;
@@ -118,6 +119,7 @@ public sealed class RpsSummary
 {
     public bool Loaded { get; set; }
     public BuildStatus? BuildStatus { get; set; }
+    public BuildStatus? DesktopValidationStatus { get; set; }
     public RpsRun? Ddrit { get; set; }
     public RpsRun? SpeedometerScoped { get; set; }
     public RpsRun? Speedometer { get; set; }
@@ -129,6 +131,7 @@ public sealed class RpsSummary
             var displays = new[]
             {
                 ("Build", BuildStatus.Display()),
+                ("DesktopValidation", DesktopValidationStatus?.Display()),
                 ("DDRIT", Ddrit.Display()),
                 ("Speedometer-Scoped", SpeedometerScoped?.Display()),
                 ("Speedometer", Speedometer.Display()),

@@ -903,6 +903,190 @@ public class RpsParserTests
             """);
     }
 
+    [Fact]
+    public void FailedDesktopValidation()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/594268",
+            Checks = """
+            {
+                "configuration": {
+                    "createdBy": {
+                        "displayName": "John Smith",
+                        "url": "https://spsprodwus21.vssps.visualstudio.com/00000000-0000-0000-0000-000000000000/_apis/Identities/00000000-0000-0000-0000-000000000000",
+                        "_links": {
+                            "avatar": {
+                                "href": "https://dev.azure.com/devdiv/_apis/GraphProfile/MemberAvatars/test"
+                            }
+                        },
+                        "id": "00000000-0000-0000-0000-000000000000",
+                        "uniqueName": "example@example.com",
+                        "imageUrl": "https://example.com",
+                        "descriptor": "test"
+                    },
+                    "createdDate": "2024-08-22T21:44:05.4060185Z",
+                    "isEnabled": true,
+                    "isBlocking": true,
+                    "isDeleted": false,
+                    "settings": {
+                        "buildDefinitionId": 10310,
+                        "queueOnSourceUpdateOnly": true,
+                        "manualQueueOnly": false,
+                        "displayName": "CloudBuild - PR",
+                        "validDuration": 4320,
+                        "scope": [
+                            {
+                                "refName": "refs/heads/main",
+                                "matchKind": "Exact",
+                                "repositoryId": "a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            }
+                        ]
+                    },
+                    "isEnterpriseManaged": false,
+                    "_links": {
+                        "self": {
+                            "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/configurations/8171"
+                        },
+                        "policyType": {
+                            "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/types/0609b952-1397-4640-95ec-e00a01b2c241"
+                        }
+                    },
+                    "revision": 10,
+                    "id": 8171,
+                    "url": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/configurations/8171",
+                    "type": {
+                        "id": "0609b952-1397-4640-95ec-e00a01b2c241",
+                        "url": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/types/0609b952-1397-4640-95ec-e00a01b2c241",
+                        "displayName": "Build"
+                    }
+                },
+                "artifactId": "vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee%2f558633",
+                "evaluationId": "284f5e50-37a6-4138-857f-1b9a43c5fb8c",
+                "startedDate": "2024-11-21T22:25:45.5374566Z",
+                "completedDate": "2024-11-22T00:06:28.502424Z",
+                "status": "approved",
+                "context": {
+                    "lastMergeCommitId": "68d748cd99082dbbd29e9c6da1dab0a40270c76a",
+                    "lastMergeSourceCommitId": "bce87b090700562f3cf5ad265b18deb91c3169bc",
+                    "lastMergeTargetCommitId": "3fbf085219e85894be35e057a82f543cb08d17c0",
+                    "buildId": 10598285,
+                    "buildDefinitionId": 10310,
+                    "buildDefinitionName": "DD-CB-PR",
+                    "buildIsNotCurrent": true,
+                    "buildStartedUtc": "2024-11-21T22:25:35.8450886Z",
+                    "isExpired": false,
+                    "buildAfterMerge": false,
+                    "wasAutoRequeued": false,
+                    "buildOutputPreview": null
+                }
+            },
+            {
+                "configuration": {
+                    "createdBy": {
+                        "displayName": "John Smith",
+                        "url": "https://spsprodwus21.vssps.visualstudio.com/00000000-0000-0000-0000-000000000000/_apis/Identities/00000000-0000-0000-0000-000000000000",
+                        "_links": {
+                            "avatar": {
+                                "href": "https://dev.azure.com/devdiv/_apis/GraphProfile/MemberAvatars/test"
+                            }
+                        },
+                        "id": "00000000-0000-0000-0000-000000000000",
+                        "uniqueName": "example@example.com",
+                        "imageUrl": "https://example.com",
+                        "descriptor": "test"
+                    },
+                    "createdDate": "2024-08-22T21:44:13.3435714Z",
+                    "isEnabled": true,
+                    "isBlocking": true,
+                    "isDeleted": false,
+                    "settings": {
+                        "buildDefinitionId": 18443,
+                        "queueOnSourceUpdateOnly": true,
+                        "manualQueueOnly": false,
+                        "displayName": "Desktop Validation - MSBuild Retail ",
+                        "validDuration": 4320,
+                        "scope": [
+                            {
+                                "refName": "refs/heads/main",
+                                "matchKind": "Exact",
+                                "repositoryId": "a290117c-5a8a-40f7-bc2c-f14dbe3acf6d"
+                            }
+                        ]
+                    },
+                    "isEnterpriseManaged": false,
+                    "_links": {
+                        "self": {
+                            "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/configurations/20247"
+                        },
+                        "policyType": {
+                            "href": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/types/0609b952-1397-4640-95ec-e00a01b2c241"
+                        }
+                    },
+                    "revision": 19,
+                    "id": 20247,
+                    "url": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/configurations/20247",
+                    "type": {
+                        "id": "0609b952-1397-4640-95ec-e00a01b2c241",
+                        "url": "https://dev.azure.com/devdiv/0bdbc590-a062-4c3f-b0f6-9383f67865ee/_apis/policy/types/0609b952-1397-4640-95ec-e00a01b2c241",
+                        "displayName": "Build"
+                    }
+                },
+                "artifactId": "vstfs:///CodeReview/CodeReviewId/0bdbc590-a062-4c3f-b0f6-9383f67865ee%2f594268",
+                "evaluationId": "0dce4aef-6ac8-44ce-a72f-758a5719cd33",
+                "startedDate": "2024-11-21T22:25:45.5374566Z",
+                "completedDate": "2024-11-21T23:44:23.9392948Z",
+                "status": "rejected",
+                "context": {
+                    "lastMergeCommitId": "68d748cd99082dbbd29e9c6da1dab0a40270c76a",
+                    "lastMergeSourceCommitId": "bce87b090700562f3cf5ad265b18deb91c3169bc",
+                    "lastMergeTargetCommitId": "3fbf085219e85894be35e057a82f543cb08d17c0",
+                    "buildId": 10598293,
+                    "buildDefinitionId": 18443,
+                    "buildDefinitionName": "MSBuild Retail Validation - PR",
+                    "buildIsNotCurrent": false,
+                    "buildStartedUtc": "2024-11-21T22:25:44.7207165Z",
+                    "isExpired": false,
+                    "buildAfterMerge": false,
+                    "wasAutoRequeued": false,
+                    "buildOutputPreview": {
+                        "jobName": "MSBuild Retail Validation",
+                        "taskName": "Run MSBuild",
+                        "errors": [
+                            {
+                                "lineNumber": 16677,
+                                "message": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\MSBuild\\Microsoft\\VisualStudio\\v17.0\\AppxPackage\\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly \"C:\\Users\\cloudtest\\.nuget\\packages\\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\\6.2.14\\runtimes\\win10-x86\\lib\\uap10.0.15138\\Microsoft.Win32.Primitives.dll\" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7ce..."
+                            },
+                            {
+                                "lineNumber": 16715,
+                                "message": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\MSBuild\\Microsoft\\VisualStudio\\v17.0\\AppxPackage\\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly \"C:\\Users\\cloudtest\\.nuget\\packages\\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\\6.2.14\\runtimes\\win10-x86\\lib\\uap10.0.15138\\System.AppContext.dll\" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7..."
+                            },
+                            {
+                                "lineNumber": 16753,
+                                "message": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\MSBuild\\Microsoft\\VisualStudio\\v17.0\\AppxPackage\\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly \"C:\\Users\\cloudtest\\.nuget\\packages\\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\\6.2.14\\runtimes\\win10-x86\\lib\\uap10.0.15138\\System.Buffers.dll\" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798..."
+                            }
+                        ]
+                    }
+                }
+            }
+            """,
+        }, """
+            BuildStatus:
+              Status: Approved
+              Expires: 2024-11-24T22:25:35.8450886+00:00
+            DesktopValidationStatus:
+              Status: Rejected
+              Expires: 2024-11-24T22:25:44.7207165+00:00
+            Display:
+              Short: Build: ✔, DesktopValidation: ✘, DDRIT: N/A, Speedometer: N/A
+              Long:
+                Build: Approved (expires 2024-11-24T22:25:35.8450886+00:00)
+                DesktopValidation: Rejected (expires 2024-11-24T22:25:44.7207165+00:00)
+                DDRIT: Not started
+                Speedometer: Not started
+            """);
+    }
+
     [InlineSnapshotAssertion(parameterName: nameof(expected))]
     private static void Verify(Entry input, string? expected = null, [CallerFilePath] string? filePath = null, [CallerLineNumber] int lineNumber = -1)
     {
