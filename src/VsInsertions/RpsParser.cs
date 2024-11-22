@@ -20,7 +20,8 @@ public sealed class RpsParser
         var threadsNode = JsonNode.Parse(threadsJson);
         var threads = threadsNode!["value"]!.AsArray();
 
-        rpsSummary.BuildStatus = getBuildStatus(checksJson);
+        rpsSummary.BuildStatus = getBuildStatus(checksJson, "CloudBuild");
+        rpsSummary.DesktopValidationStatus = getBuildStatus(checksJson, "Desktop Validation");
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
         rpsSummary.SpeedometerScoped = getRunResults(threads, "We've started Speedometer-Scoped");
         rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer\r");
@@ -79,11 +80,11 @@ public sealed class RpsParser
             return result;
         }
 
-        static BuildStatus? getBuildStatus(string checksJson)
+        static BuildStatus? getBuildStatus(string checksJson, string checkTitle)
         {
             var checksNode = JsonNode.Parse(checksJson);
             var checks = checksNode!["value"]!.AsArray();
-            var buildCheck = checks.Where(x => x?["configuration"]?["settings"]?["displayName"]?.ToString().Contains("CloudBuild", StringComparison.OrdinalIgnoreCase) == true).FirstOrDefault();
+            var buildCheck = checks.Where(x => x?["configuration"]?["settings"]?["displayName"]?.ToString().Contains(checkTitle, StringComparison.OrdinalIgnoreCase) == true).FirstOrDefault();
             if (buildCheck == null)
             {
                 return null;
@@ -96,7 +97,10 @@ public sealed class RpsParser
 
             var isExpired = buildCheck["context"]?["isExpired"]?.GetValue<bool>() == true;
 
-            return new BuildStatus(Status: result, IsExpired: isExpired, Expires: tryGetExpirationDate(buildCheck));
+            var outputPreviewEntries = buildCheck["context"]?["buildOutputPreview"]?["errors"]?.AsArray().Select(x => x?["message"]?.ToString());
+            var outputPreview = outputPreviewEntries is null ? null : string.Join("\n", outputPreviewEntries);
+
+            return new BuildStatus(Status: result, IsExpired: isExpired, Expires: tryGetExpirationDate(buildCheck), OutputPreview: outputPreview);
         }
 
         static DateTimeOffset? tryGetExpirationDate(JsonNode buildCheck)
@@ -112,12 +116,13 @@ public sealed class RpsParser
     }
 }
 
-public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires);
+public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires, string? OutputPreview);
 
 public sealed class RpsSummary
 {
     public bool Loaded { get; set; }
     public BuildStatus? BuildStatus { get; set; }
+    public BuildStatus? DesktopValidationStatus { get; set; }
     public RpsRun? Ddrit { get; set; }
     public RpsRun? SpeedometerScoped { get; set; }
     public RpsRun? Speedometer { get; set; }
@@ -129,6 +134,7 @@ public sealed class RpsSummary
             var displays = new[]
             {
                 ("Build", BuildStatus.Display()),
+                ("DesktopValidation", DesktopValidationStatus?.Display()),
                 ("DDRIT", Ddrit.Display()),
                 ("Speedometer-Scoped", SpeedometerScoped?.Display()),
                 ("Speedometer", Speedometer.Display()),
@@ -175,9 +181,15 @@ public static class RpsExtensions
         }
 
         var statusDisplay = status.Status.Display();
-        return new(
-            status.IsExpired ? "E" : statusDisplay.Short,
-            status.IsExpired ? $"Expired ({statusDisplay.Long})" : $"{statusDisplay.Long} (expires {status.Expires:O})");
+        var shortText = status.IsExpired ? "E" : statusDisplay.Short;
+        var longText = status.IsExpired ? $"Expired ({statusDisplay.Long})" : $"{statusDisplay.Long} (expires {status.Expires:O})";
+
+        if (status.OutputPreview != null)
+        {
+            longText += $"\n\nOutput preview:\n{status.OutputPreview}";
+        }
+
+        return new(shortText, longText);
     }
 
     public static Display Display(this PolicyEvaluationStatus status)
