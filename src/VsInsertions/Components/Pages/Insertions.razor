@@ -244,7 +244,11 @@ else
                     else
                     {
                         var build = insertion.RpsSummary.BuildStatus.Display();
-                        <td title="Build: @build.Long">@build.Short</td>
+                        var desktopValidation = insertion.RpsSummary.DesktopValidationStatus.Display();
+                        <td>
+                            <span title="Build: @build.Long">@build.Short</span>
+                            <span title="DesktopValidation: @desktopValidation.Long">@desktopValidation.Short</span>
+                        </td>
                         var ddrit = insertion.RpsSummary.Ddrit.Display();
                         <td title="DDRIT: @ddrit.Long">@ddrit.Short</td>
                         var speedometerScoped = insertion.RpsSummary.SpeedometerScoped.Display();
