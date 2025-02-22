@@ -1,5 +1,6 @@
 using VsInsertions;
 using VsInsertions.Components;
+using VsInsertions.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddControllers();
+CacheController.RegisterServices(builder.Services);
 
 builder.Services.AddSingleton<TitleParser>();
 builder.Services.AddSingleton<RpsParser>();
@@ -28,5 +32,9 @@ app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+app.UseCors();
+
+app.MapControllers();
 
 app.Run();
