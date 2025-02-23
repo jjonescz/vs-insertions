@@ -16,7 +16,7 @@ jobs:
       - uses: ./.github/actions/build
 
   deploy:
-    if: ${{ contains(github.event.pull_request.labels.*.name, format('deploy{0} staging', ':')) }}
+    if: ${{ contains(github.event.pull_request.labels.*.name, format('deploy{0} staging', ':')) || github.event_name == 'workflow_dispatch' }}
 
     runs-on: windows-latest
     needs: build
@@ -41,7 +41,9 @@ jobs:
 
       # Remove the 'deploy: staging' label from other PRs.
       - uses: actions/checkout@v4
+        if: ${{ github.event_name != 'workflow_dispatch' }}
       - name: Remove label
+        if: ${{ github.event_name != 'workflow_dispatch' }}
         uses: actions/github-script@v7
         env:
           WORKSPACE_DIR: ${{ github.workspace }}
