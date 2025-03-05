@@ -215,7 +215,7 @@ else
 
                     <td title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</td>
 
-                    <td><a href="@insertion.Url" title="@insertion.Title" target="_blank">@insertion.BuildNumber</a></td>
+                    <td><a href="@insertion.Url" title="@insertion.BuildNumberTooltip" target="_blank">@insertion.BuildNumber</a></td>
 
                     @if (editMode)
                     {
@@ -357,6 +357,8 @@ else
         accessTokenInput = null;
         errorHtml = null;
         started = false;
+
+        await StartAsync();
     }
 
     private async Task LogOutAsync()
@@ -504,6 +506,7 @@ else
             }
         }
         public string? SourceBranch => ParsedTitle?.SourceBranch;
+        public DateTimeOffset CreationDate => node["creationDate"]!.GetValue<DateTimeOffset>();
         public string BuildNumber => ParsedTitle?.BuildNumber ?? Title;
         public (int, int)? BuildNumberParts
         {
@@ -533,6 +536,17 @@ else
                 {
                     page.rpsSummaries[PullRequestId] = value;
                 }
+            }
+        }
+
+        public string BuildNumberTooltip
+        {
+            get
+            {
+                return $"""
+                    {Title}
+                    Created: {CreationDate:R}
+                    """;
             }
         }
 

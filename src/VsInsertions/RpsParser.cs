@@ -34,7 +34,7 @@ public sealed class RpsParser
                 return null;
             }
 
-            var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString() is "VSEng Perf Automation Account" or "VSEngPerfManager" or "VSEng-PIT-Backend").LastOrDefault();
+            var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString().StartsWith("VSEng", StringComparison.Ordinal)).LastOrDefault();
             if (latestComment == null)
             {
                 return new RpsRun(Regressions: 0, BrokenTests: 0);
@@ -42,8 +42,8 @@ public sealed class RpsParser
 
             var flags = RpsRunFlags.Finished;
 
-            var latestText = latestComment["content"]!.ToString();
-            if (latestText.Contains("Test Run **PASSED**"))
+            var latestText = latestComment["content"]!.ToString().Replace("**", "");
+            if (latestText.Contains("test run passed", StringComparison.OrdinalIgnoreCase))
             {
                 return new RpsRun(Regressions: 0, BrokenTests: 0, Flags: flags);
             }
