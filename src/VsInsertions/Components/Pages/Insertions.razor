@@ -357,6 +357,8 @@ else
         accessTokenInput = null;
         errorHtml = null;
         started = false;
+
+        await StartAsync();
     }
 
     private async Task LogOutAsync()
