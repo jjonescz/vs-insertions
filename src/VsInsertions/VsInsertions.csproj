@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>ae3ea2d0-4a3c-4e57-8343-2e555074a60b</UserSecretsId>
+    <Features>use-roslyn-tokenizer=true</Features>
   </PropertyGroup>
 
   <ItemGroup>
