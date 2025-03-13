@@ -45,12 +45,17 @@ else
                 </p>
                 <ol>
                     <li>
-                        <pre><code>dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease</code></pre>
+                        <CopyableCode Code="dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease" />
                     </li>
                     <li>
-                        <pre><code>pat-generator --scopes code_write --organizations devdiv --expires-in 7</code></pre>
+                        <CopyableCode Code="pat-generator --scopes code_write --organizations devdiv --expires-in 7" />
                     </li>
                 </ol>
+
+                <p>
+                    Alternatively, you can go to <a href="https://dev.azure.com/devdiv/_usersSettings/tokens" target="_blank">Azure DevOps &gt; PATs</a>,
+                    and create a token with <code>Code (Read & write)</code> permission.
+                </p>
             </details>
         }
         else
