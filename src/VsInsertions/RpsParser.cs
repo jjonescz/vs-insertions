@@ -197,10 +197,10 @@ public static class RpsExtensions
         return status switch
         {
             PolicyEvaluationStatus.Running => new("...", "Running"),
-            PolicyEvaluationStatus.Queued => new("...", "Queued"),
+            PolicyEvaluationStatus.Queued => new("–", "Queued"),
             PolicyEvaluationStatus.Approved => new("✔", "Approved"),
             PolicyEvaluationStatus.Rejected => new("✘", "Rejected"),
-            PolicyEvaluationStatus.Broken => new("✘", "Broken"),
+            PolicyEvaluationStatus.Broken => new("B", "Broken"),
             PolicyEvaluationStatus.NotApplicable => new("N/A", "Not applicable"),
             _ => unknown(status),
         };
