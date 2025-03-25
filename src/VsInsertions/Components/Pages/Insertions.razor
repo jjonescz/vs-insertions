@@ -487,17 +487,7 @@ else
         public ParsedTitle? ParsedTitle => (_parsedTitle ??= page.TitleParser.Parse(Title));
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
-        public string? Prefix
-        {
-            get
-            {
-                return ParsedTitle?.Prefix switch
-                {
-                    "PR Validation" => "PR",
-                    var p => p,
-                };
-            }
-        }
+        public string? Prefix => ParsedTitle?.Prefix.Trim('[', ']');
         public string Repo
         {
             get
