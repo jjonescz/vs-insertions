@@ -188,16 +188,8 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
+            @foreach (var insertion in insertions.Where(ShouldDisplayInsertion).OrderByDescending(GetInsertionSortKey))
             {
-                if (insertion.Repo != currentRepo || insertion.TargetBranch != currentTargetBranch ||
-                (!displayPrs && insertion.ParsedTitle?.IsPr == true) ||
-                (!displayDrafts && insertion.IsDraft) ||
-                (!displayInactive && insertion.Status != PullRequestStatus.Active))
-                {
-                    continue;
-                }
-
                 <tr>
                     <th scope="row" title="PR number">@insertion.PullRequestId</th>
                     <td title="@insertion.Status">@StatusToEmoji(insertion.Status)</td>
@@ -439,12 +431,20 @@ else
     private static (int, int, int, string) GetInsertionSortKey(VsInsertion insertion)
         => insertion.SortKey;
 
+    private bool ShouldDisplayInsertion(VsInsertion insertion)
+    {
+        return insertion.Repo == currentRepo && insertion.TargetBranch == currentTargetBranch &&
+            (displayPrs || (insertion.ParsedTitle?.IsPr) != true) &&
+            (displayDrafts || !insertion.IsDraft) &&
+            (displayInactive || insertion.Status == PullRequestStatus.Active);
+    }
+
     private void LoadRps(int? max = null)
     {
         if (insertions != null)
         {
             var count = 0;
-            foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
+            foreach (var insertion in insertions.Where(ShouldDisplayInsertion).OrderByDescending(GetInsertionSortKey))
             {
                 if (insertion.RpsSummary is null)
                 {
@@ -464,7 +464,7 @@ else
     {
         if (insertions != null)
         {
-            foreach (var insertion in insertions.OrderByDescending(GetInsertionSortKey))
+            foreach (var insertion in insertions.Where(ShouldDisplayInsertion).OrderByDescending(GetInsertionSortKey))
             {
                 if (insertion.RpsSummary != null)
                 {
