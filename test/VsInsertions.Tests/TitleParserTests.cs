@@ -8,6 +8,38 @@ public class TitleParserTests
     public readonly record struct Entry(string Url, string Title);
 
     [Fact]
+    public void Normal_Roslyn()
+    {
+        Verify(new()
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663273",
+                Title = "[dNext] Roslyn 'main/20250819.15' Insertion into main",
+            }, """
+            Prefix: [dNext]
+            Repository: Roslyn
+            SourceBranch: main
+            BuildNumber: 20250819.15
+            TargetBranch: main
+            """);
+    }
+
+    [Fact]
+    public void Normal_VsUnitTesting()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663683",
+            Title = "[Auto Insertion] VS Unit Testing 'main/20250820.7' Insertion into main",
+        }, """
+            Prefix:
+            Repository: VS Unit Testing
+            SourceBranch: main
+            BuildNumber: 20250820.7
+            TargetBranch: main
+            """);
+    }
+
+    [Fact]
     public void PrValidation_01()
     {
         Verify(new()
@@ -189,6 +221,23 @@ public class TitleParserTests
             Repository: Roslyn
             SourceBranch: main
             BuildNumber: 20250321.2
+            TargetBranch: main
+            IsPr: true
+            """);
+    }
+
+    [Fact]
+    public void PrValidation_12()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663279",
+            Title = "[For Private Testing] [Arcade Rollback] VS Unit Testing 'darc-main-9679947d-5499-41bb-ab26-7c6a5e0ff4a0/20250820.3' Insertion into main",
+        }, """
+            Prefix: [For Private Testing] [Arcade Rollback]
+            Repository: VS Unit Testing
+            SourceBranch: darc-main-9679947d-5499-41bb-ab26-7c6a5e0ff4a0
+            BuildNumber: 20250820.3
             TargetBranch: main
             IsPr: true
             """);
