@@ -27,14 +27,46 @@ public class TitleParserTests
     public void Normal_VsUnitTesting()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663683",
-            Title = "[Auto Insertion] VS Unit Testing 'main/20250820.7' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663683",
+                Title = "[Auto Insertion] VS Unit Testing 'main/20250820.7' Insertion into main",
+            }, """
             Prefix:
             Repository: VS Unit Testing
             SourceBranch: main
             BuildNumber: 20250820.7
+            TargetBranch: main
+            """);
+    }
+
+    [Fact]
+    public void Normal_FSharp()
+    {
+        Verify(new()
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/675188",
+                Title = "Insert F# main 20250930.2 Payload into main",
+            }, """
+            Prefix:
+            Repository: F#
+            SourceBranch: main
+            BuildNumber: 20250930.2
+            TargetBranch: main
+            """);
+    }
+
+    [Fact]
+    public void Normal_WinForms()
+    {
+        Verify(new()
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/672725",
+                Title = "Insert microsoft/winforms-designer main 20250922.1 Payload into main",
+            }, """
+            Prefix:
+            Repository: microsoft/winforms-designer
+            SourceBranch: main
+            BuildNumber: 20250922.1
             TargetBranch: main
             """);
     }
@@ -77,10 +109,10 @@ public class TitleParserTests
     public void PrValidation_03()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/555595",
-            Title = "[PR Validation] Razor 'lspeditorfeaturedetector/20240604.3' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/555595",
+                Title = "[PR Validation] Razor 'lspeditorfeaturedetector/20240604.3' Insertion into main",
+            }, """
             Prefix: [PR Validation]
             Repository: Razor
             SourceBranch: lspeditorfeaturedetector
@@ -94,10 +126,10 @@ public class TitleParserTests
     public void PrValidation_04()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/559658",
-            Title = "[PR Validation] Razor 'dev/jjonescz/remove-internal-runtime-support/20240621.3' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/559658",
+                Title = "[PR Validation] Razor 'dev/jjonescz/remove-internal-runtime-support/20240621.3' Insertion into main",
+            }, """
             Prefix: [PR Validation]
             Repository: Razor
             SourceBranch: dev/jjonescz/remove-internal-runtime-support
@@ -111,10 +143,10 @@ public class TitleParserTests
     public void PrValidation_05()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/559658",
-            Title = "[PR Validation] Razor 'dev/jjonescz/remove-internal-runtime-support/20240621.3' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/559658",
+                Title = "[PR Validation] Razor 'dev/jjonescz/remove-internal-runtime-support/20240621.3' Insertion into main",
+            }, """
             Prefix: [PR Validation]
             Repository: Razor
             SourceBranch: dev/jjonescz/remove-internal-runtime-support
@@ -128,10 +160,10 @@ public class TitleParserTests
     public void PrValidation_06()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/557091",
-            Title = "[PR Validation] - AsyncLazy Roslyn 'main/20240611.1' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/557091",
+                Title = "[PR Validation] - AsyncLazy Roslyn 'main/20240611.1' Insertion into main",
+            }, """
             Prefix: [PR Validation] - AsyncLazy
             Repository: Roslyn
             SourceBranch: main
@@ -145,10 +177,10 @@ public class TitleParserTests
     public void PrValidation_07()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/556259",
-            Title = "[PR Validation 73880] Roslyn 'main/20240606.3' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/556259",
+                Title = "[PR Validation 73880] Roslyn 'main/20240606.3' Insertion into main",
+            }, """
             Prefix: [PR Validation 73880]
             Repository: Roslyn
             SourceBranch: main
@@ -162,10 +194,10 @@ public class TitleParserTests
     public void PrValidation_08()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/591017",
-            Title = "[Validation] Roslyn 'release/vscode/20241107.6' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/591017",
+                Title = "[Validation] Roslyn 'release/vscode/20241107.6' Insertion into main",
+            }, """
             Prefix: [Validation]
             Repository: Roslyn
             SourceBranch: release/vscode
@@ -179,10 +211,10 @@ public class TitleParserTests
     public void PrValidation_09()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/563748",
-            Title = "[Smart Rename Context Validation] Roslyn 'main/20240709.2' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/563748",
+                Title = "[Smart Rename Context Validation] Roslyn 'main/20240709.2' Insertion into main",
+            }, """
             Prefix: [Smart Rename Context Validation]
             Repository: Roslyn
             SourceBranch: main
@@ -196,10 +228,10 @@ public class TitleParserTests
     public void PrValidation_10()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/621995",
-            Title = "[PR Validation] [jasonmal] Roslyn 'main-vs-deps/20250324.1' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/621995",
+                Title = "[PR Validation] [jasonmal] Roslyn 'main-vs-deps/20250324.1' Insertion into main",
+            }, """
             Prefix: [PR Validation] [jasonmal]
             Repository: Roslyn
             SourceBranch: main-vs-deps
@@ -213,10 +245,10 @@ public class TitleParserTests
     public void PrValidation_11()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/621367",
-            Title = "[PR Validation] - Server GC Roslyn 'main/20250321.2' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/621367",
+                Title = "[PR Validation] - Server GC Roslyn 'main/20250321.2' Insertion into main",
+            }, """
             Prefix: [PR Validation] - Server GC
             Repository: Roslyn
             SourceBranch: main
@@ -230,10 +262,10 @@ public class TitleParserTests
     public void PrValidation_12()
     {
         Verify(new()
-        {
-            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663279",
-            Title = "[For Private Testing] [Arcade Rollback] VS Unit Testing 'darc-main-9679947d-5499-41bb-ab26-7c6a5e0ff4a0/20250820.3' Insertion into main",
-        }, """
+            {
+                Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/663279",
+                Title = "[For Private Testing] [Arcade Rollback] VS Unit Testing 'darc-main-9679947d-5499-41bb-ab26-7c6a5e0ff4a0/20250820.3' Insertion into main",
+            }, """
             Prefix: [For Private Testing] [Arcade Rollback]
             Repository: VS Unit Testing
             SourceBranch: darc-main-9679947d-5499-41bb-ab26-7c6a5e0ff4a0
