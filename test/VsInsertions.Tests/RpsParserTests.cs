@@ -1112,14 +1112,14 @@ public class RpsParserTests
             """,
         }, """
             Ddrit:
-              Regressions: -1
+              Regressions: 1
               BrokenTests: -1
               Flags: Finished
             Display:
-              Short: Build: ?, DDRIT: ?, Speedometer: N/A
+              Short: Build: ?, DDRIT: 1, Speedometer: N/A
               Long:
                 Build: Unknown
-                DDRIT: Unknown result
+                DDRIT: Regressions: 1
                 Speedometer: Not started
             """);
     }
