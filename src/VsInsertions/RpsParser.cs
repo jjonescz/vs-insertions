@@ -34,15 +34,20 @@ public sealed class RpsParser
                 return null;
             }
 
-            var latestComment = latestThread["comments"]!.AsArray().Where(x => x!["author"]!["displayName"]!.ToString().StartsWith("VSEng", StringComparison.Ordinal)).LastOrDefault();
-            if (latestComment == null)
-            {
-                return new RpsRun(Regressions: 0, BrokenTests: 0);
-            }
+            var applicableComments = latestThread["comments"]!.AsArray()
+                .Where(x => x!["author"]!["displayName"]!.ToString().StartsWith("VSEng", StringComparison.Ordinal))
+                .Select(tryParseComment);
 
+            return applicableComments.LastOrDefault(r => r.Display().Short != "?")
+                ?? applicableComments.LastOrDefault()
+                ?? new RpsRun(Regressions: 0, BrokenTests: 0);
+        }
+
+        static RpsRun tryParseComment(JsonNode? comment)
+        {
             var flags = RpsRunFlags.Finished;
 
-            var latestText = latestComment["content"]!.ToString().Replace("**", "");
+            var latestText = comment!["content"]!.ToString().Replace("**", "");
             if (latestText.Contains("test run passed", StringComparison.OrdinalIgnoreCase))
             {
                 return new RpsRun(Regressions: 0, BrokenTests: 0, Flags: flags);

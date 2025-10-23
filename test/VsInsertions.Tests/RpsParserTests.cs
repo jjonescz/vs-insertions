@@ -1043,6 +1043,88 @@ public class RpsParserTests
     }
 
     [Fact]
+    public void Ddrit()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/679319",
+            Threads = """
+            {
+              "comments": [
+                {
+                  "author": {
+                    "displayName": "DevDiv Build Service (devdiv)"
+                  },
+                  "content": "###We've started **VS64** Perf DDRITs"
+                },
+                {
+                  "author": {
+                    "displayName": "VSEng-PIT-Backend"
+                  },
+                  "content": "## ❌ This PR may have introduced 1 regression."
+                }
+              ]
+            }
+            """,
+        }, """
+            Ddrit:
+              Regressions: 1
+              BrokenTests: -1
+              Flags: Finished
+            Display:
+              Short: Build: ?, DDRIT: 1, Speedometer: N/A
+              Long:
+                Build: Unknown
+                DDRIT: Regressions: 1
+                Speedometer: Not started
+            """);
+    }
+
+    [Fact]
+    public void Ddrit_Rerun()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/681706",
+            Threads = """
+            {
+              "comments": [
+                {
+                  "author": {
+                    "displayName": "DevDiv Build Service (devdiv)"
+                  },
+                  "content": "###We've started **VS64** Perf DDRITs **Rerun**"
+                },
+                {
+                  "author": {
+                    "displayName": "VSEng-PIT-Backend"
+                  },
+                  "content": "## ❌ This PR may have introduced 1 regression."
+                },
+                {
+                  "author": {
+                    "displayName": "VSEng-PIT-Backend"
+                  },
+                  "content": "This RPS rerun had <b>1</b> regression(s)."
+                }
+              ]
+            }
+            """,
+        }, """
+            Ddrit:
+              Regressions: 1
+              BrokenTests: -1
+              Flags: Finished
+            Display:
+              Short: Build: ?, DDRIT: 1, Speedometer: N/A
+              Long:
+                Build: Unknown
+                DDRIT: Regressions: 1
+                Speedometer: Not started
+            """);
+    }
+
+    [Fact]
     public void FailedDesktopValidation()
     {
         Verify(new()
