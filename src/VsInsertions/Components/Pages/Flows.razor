@@ -721,7 +721,10 @@
 
         try
         {
-            flowPrs = await GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
+            flowPrs = (await GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]))
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
             // Load details for all PRs.
             foreach (var pr in flowPrs)
             {
@@ -767,8 +770,11 @@
 
         try
         {
-            outgoingFlowPrs = await GitHubFlowService.GetOutgoingFlowPrsAsync(
-                gitHubClient, parts[0], parts[1], targetRepos);
+            outgoingFlowPrs = (await GitHubFlowService.GetOutgoingFlowPrsAsync(
+                gitHubClient, parts[0], parts[1], targetRepos))
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
             foreach (var pr in outgoingFlowPrs)
             {
                 LoadPrDetailsInBackground(pr);
