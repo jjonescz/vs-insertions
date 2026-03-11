@@ -509,7 +509,7 @@
         {
             var matched = (flowPrs ?? [])
                 .Where(pr => pr.Title.Contains(sub.SourceRepoShort, StringComparison.OrdinalIgnoreCase)
-                    && (pr.TargetBranch is null || string.Equals(pr.TargetBranch, sub.TargetBranch, StringComparison.OrdinalIgnoreCase)))
+                    && MatchesTargetBranch(pr, sub.TargetBranch))
                 .OrderByDescending(pr => pr.Number)
                 .ToList();
             foreach (var pr in matched)
@@ -542,7 +542,7 @@
         {
             var matched = (outgoingFlowPrs ?? [])
                 .Where(pr => string.Equals(pr.Repo, sub.TargetRepoShort, StringComparison.OrdinalIgnoreCase)
-                    && (pr.TargetBranch is null || string.Equals(pr.TargetBranch, sub.TargetBranch, StringComparison.OrdinalIgnoreCase)))
+                    && MatchesTargetBranch(pr, sub.TargetBranch))
                 .OrderByDescending(pr => pr.Number)
                 .ToList();
             foreach (var pr in matched)
