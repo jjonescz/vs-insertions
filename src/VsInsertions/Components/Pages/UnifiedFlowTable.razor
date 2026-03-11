@@ -152,17 +152,31 @@ else
                                 <td>
                                     @if (primaryPr.State == "open" && !primaryPr.Merged)
                                     {
-                                        <button class="btn btn-success btn-sm me-1"
-                                                @onclick="() => OnApproveAndMerge.InvokeAsync(primaryPr)"
+                                        <button class="btn @(primaryPr.NeedsApproval ? "btn-success" : "btn-outline-success") btn-sm me-1"
+                                                @onclick="() => OnApprove.InvokeAsync(primaryPr)"
                                                 disabled="@(primaryPr == ActionInProgressPr)"
-                                                title="Approve, squash-merge, and delete branch">
+                                                title="@(primaryPr.NeedsApproval ? "Approve this PR" : "Already approved — approve again")">
+                                            @if (primaryPr == ActionInProgressPr && ActionType == "approve")
+                                            {
+                                                @:Approving...
+                                            }
+                                            else
+                                            {
+                                                @:Approve
+                                            }
+                                        </button>
+
+                                        <button class="btn btn-primary btn-sm me-1"
+                                                @onclick="() => OnMerge.InvokeAsync(primaryPr)"
+                                                disabled="@(primaryPr == ActionInProgressPr || primaryPr.Mergeable == false)"
+                                                title="@(primaryPr.Mergeable == false ? "PR is not mergeable (conflicts or requirements not met)" : "Squash-merge and delete branch")">
                                             @if (primaryPr == ActionInProgressPr && ActionType == "merge")
                                             {
                                                 @:Merging...
                                             }
                                             else
                                             {
-                                                @:Approve & Merge
+                                                @:Merge
                                             }
                                         </button>
 
@@ -224,11 +238,17 @@ else
                                                 </h6>
                                                 @if (pr != primaryPr && pr.State == "open" && !pr.Merged)
                                                 {
-                                                    <button class="btn btn-success btn-sm"
-                                                            @onclick="() => OnApproveAndMerge.InvokeAsync(pr)"
+                                                    <button class="btn @(pr.NeedsApproval ? "btn-success" : "btn-outline-success") btn-sm"
+                                                            @onclick="() => OnApprove.InvokeAsync(pr)"
                                                             disabled="@(pr == ActionInProgressPr)"
-                                                            title="Approve, squash-merge, and delete branch">
-                                                        @(pr == ActionInProgressPr && ActionType == "merge" ? "Merging..." : "Approve & Merge")
+                                                            title="@(pr.NeedsApproval ? "Approve this PR" : "Already approved — approve again")">
+                                                        @(pr == ActionInProgressPr && ActionType == "approve" ? "Approving..." : "Approve")
+                                                    </button>
+                                                    <button class="btn btn-primary btn-sm"
+                                                            @onclick="() => OnMerge.InvokeAsync(pr)"
+                                                            disabled="@(pr == ActionInProgressPr || pr.Mergeable == false)"
+                                                            title="@(pr.Mergeable == false ? "PR is not mergeable" : "Squash-merge and delete branch")">
+                                                        @(pr == ActionInProgressPr && ActionType == "merge" ? "Merging..." : "Merge")
                                                     </button>
                                                     @if (pr.DetailsLoaded && pr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
                                                     {
@@ -339,7 +359,8 @@ else
     [Parameter] public HashSet<int> ExpandedPrs { get; set; } = [];
     [Parameter] public FlowPr? ActionInProgressPr { get; set; }
     [Parameter] public string? ActionType { get; set; }
-    [Parameter] public EventCallback<FlowPr> OnApproveAndMerge { get; set; }
+    [Parameter] public EventCallback<FlowPr> OnApprove { get; set; }
+    [Parameter] public EventCallback<FlowPr> OnMerge { get; set; }
     [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
 
     private void ToggleDetails(FlowPr pr)

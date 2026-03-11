@@ -83,7 +83,8 @@
                       ExpandedPrs="expandedPrs"
                       ActionInProgressPr="actionInProgressPr"
                       ActionType="@actionType"
-                      OnApproveAndMerge="ApproveAndMergeAsync"
+                      OnApprove="ApproveAsync"
+                      OnMerge="MergeAsync"
                       OnRetryCi="RetryCiAsync" />
 }
 
@@ -395,7 +396,44 @@
     }
 
     // === Actions ===
-    private async Task ApproveAndMergeAsync(FlowPr pr)
+    private async Task ApproveAsync(FlowPr pr)
+    {
+        var parts = pr.Repo.Split('/');
+        if (parts.Length != 2)
+            return;
+
+        actionInProgressPr = pr;
+        actionType = "approve";
+        actionMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var (success, message) = await GitHubFlowService.ApproveAsync(gitHubClient, parts[0], parts[1], pr);
+            actionSuccess = success;
+            actionMessage = message;
+
+            // Refresh details after approval to update reviews/NeedsApproval.
+            if (success)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to approve PR");
+            actionSuccess = false;
+            actionMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            actionInProgressPr = null;
+            actionType = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MergeAsync(FlowPr pr)
     {
         var parts = pr.Repo.Split('/');
         if (parts.Length != 2)
@@ -408,13 +446,13 @@
 
         try
         {
-            var (success, message) = await GitHubFlowService.ApproveAndMergeAsync(gitHubClient, parts[0], parts[1], pr);
+            var (success, message) = await GitHubFlowService.MergeAsync(gitHubClient, parts[0], parts[1], pr);
             actionSuccess = success;
             actionMessage = message;
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to approve and merge PR");
+            Logger.LogError(ex, "Failed to merge PR");
             actionSuccess = false;
             actionMessage = $"Error: {ex.Message}";
         }

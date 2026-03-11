@@ -155,6 +155,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             pr.SourceBranch = prNode?["head"]?["ref"]?.ToString();
             pr.TargetBranch = prNode?["base"]?["ref"]?.ToString();
             pr.Merged = prNode?["merged"]?.GetValue<bool>() ?? false;
+            pr.Mergeable = prNode?["mergeable"] is JsonNode m ? m.GetValue<bool>() : null;
 
             // Fetch reviews, check runs, comments in parallel.
             var reviewsTask = LoadReviewsAsync(client, owner, repo, pr.Number);
@@ -235,15 +236,14 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     }
 
     /// <summary>
-    /// Approves and merges a PR, then deletes the source branch.
+    /// Approves a PR.
     /// </summary>
-    public async Task<(bool Success, string Message)> ApproveAndMergeAsync(
+    public async Task<(bool Success, string Message)> ApproveAsync(
         HttpClient client,
         string owner,
         string repo,
         FlowPr pr)
     {
-        // 1. Approve.
         var approveUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/pulls/{pr.Number}/reviews";
         var approvePayload = JsonSerializer.Serialize(new { @event = "APPROVE" });
         var approveResponse = await client.PostAsync(approveUrl,
@@ -254,7 +254,18 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             return (false, $"Failed to approve: {approveResponse.StatusCode} — {body}");
         }
 
-        // 2. Merge (squash).
+        return (true, "PR approved.");
+    }
+
+    /// <summary>
+    /// Merges a PR (squash) and deletes the source branch.
+    /// </summary>
+    public async Task<(bool Success, string Message)> MergeAsync(
+        HttpClient client,
+        string owner,
+        string repo,
+        FlowPr pr)
+    {
         var mergeUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/pulls/{pr.Number}/merge";
         var mergePayload = JsonSerializer.Serialize(new { merge_method = "squash" });
         var mergeResponse = await client.PutAsync(mergeUrl,
@@ -265,19 +276,18 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             return (false, $"Failed to merge: {mergeResponse.StatusCode} — {body}");
         }
 
-        // 3. Delete source branch.
+        // Delete source branch.
         if (!string.IsNullOrEmpty(pr.SourceBranch))
         {
             var deleteUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/git/refs/heads/{pr.SourceBranch}";
             var deleteResponse = await client.DeleteAsync(deleteUrl);
-            // Branch deletion failure is non-critical (might already be deleted or protected).
             if (!deleteResponse.IsSuccessStatusCode)
                 logger.LogWarning("Failed to delete branch {Branch}: {Status}", pr.SourceBranch, deleteResponse.StatusCode);
         }
 
         pr.State = "closed";
         pr.Merged = true;
-        return (true, "PR approved, merged, and branch deleted.");
+        return (true, "PR merged and branch deleted.");
     }
 
     /// <summary>
@@ -369,10 +379,21 @@ public sealed class FlowPr
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public bool DetailsLoaded { get; set; }
+    public bool? Mergeable { get; set; }
 
     public List<PrReview>? Reviews { get; set; }
     public List<CheckRunInfo>? CheckRuns { get; set; }
     public List<PrComment>? Comments { get; set; }
+
+    /// <summary>
+    /// Whether the PR still needs approval (no non-bot user has approved, or changes were requested after last approval).
+    /// </summary>
+    public bool NeedsApproval =>
+        Reviews is null or { Count: 0 } ||
+        !Reviews
+            .GroupBy(r => r.Author)
+            .Select(g => g.Last())
+            .Any(r => r.State == "APPROVED");
 
     public string CiSummary
     {
