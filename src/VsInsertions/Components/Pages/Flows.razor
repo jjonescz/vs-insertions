@@ -49,7 +49,7 @@
         @if (config != null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
             <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
-                @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Load / Refresh PRs")
+                @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
             </button>
         }
     }

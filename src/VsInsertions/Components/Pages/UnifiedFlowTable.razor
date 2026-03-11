@@ -78,7 +78,7 @@ else
                         </td>
 
                         @* Channel *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(row.Subscription?.UpdateFrequency ?? "")">
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@ChannelTooltip(primaryPr, row)">
                             @(row.Subscription?.Channel ?? "—")
                         </td>
 
@@ -331,6 +331,14 @@ else
     {
         if (!ExpandedPrs.Remove(pr.Number))
             ExpandedPrs.Add(pr.Number);
+    }
+
+    private static string ChannelTooltip(FlowPr? pr, UnifiedFlowRow row)
+    {
+        var parts = new List<string>();
+        if (pr != null) parts.Add("Click to expand/collapse details");
+        if (row.Subscription?.UpdateFrequency != null) parts.Add($"Frequency: {row.Subscription.UpdateFrequency}");
+        return string.Join("\n", parts);
     }
 
     private static string PrStateEmoji(FlowPr pr) => pr switch
