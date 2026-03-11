@@ -26,18 +26,24 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
         var tree = JsonNode.Parse(treeJson);
 
         var items = tree!["value"]!.AsArray();
-        var yamlFiles = items
-            .Where(item => !(item!["isFolder"]?.GetValue<bool>() ?? false)
-                        && item["path"]!.ToString().EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+        var allFiles = items
+            .Where(item => !(item!["isFolder"]?.GetValue<bool>() ?? false))
+            .Select(item => item!["path"]!.ToString())
             .ToList();
-        logger.LogInformation("Found {TotalItems} items in tree, {YamlCount} YAML files", items.Count, yamlFiles.Count);
+        var nonEngFiles = allFiles.Where(p => !p.StartsWith("/eng/", StringComparison.OrdinalIgnoreCase)).ToList();
+        logger.LogInformation("Found {TotalItems} items in tree, {FileCount} files. Non-eng/ files: {Files}",
+            items.Count, allFiles.Count, string.Join(", ", nonEngFiles));
+        var yamlFiles = allFiles
+            .Where(p => p.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
+                     || p.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        logger.LogInformation("{YamlCount} YAML files", yamlFiles.Count);
 
         var subscriptions = new List<ArcadeSubscription>();
         var defaultChannels = new List<DefaultChannel>();
 
-        foreach (var item in yamlFiles)
+        foreach (var path in yamlFiles)
         {
-            var path = item!["path"]!.ToString();
 
             try
             {
