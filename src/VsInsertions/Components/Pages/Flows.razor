@@ -124,7 +124,7 @@
                                     <td><code>@(pr.TargetBranch ?? "—")</code></td>
 
                                     @* CI status *@
-                                    <td title="Click to expand CI details">
+                                    <td title="Click to expand CI details" style="cursor: pointer;" @onclick="() => ToggleDetails(pr)">
                                         @if (!pr.DetailsLoaded)
                                         {
                                             <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadPrDetailsAsync(pr)">
@@ -138,7 +138,7 @@
                                     </td>
 
                                     @* Reviews *@
-                                    <td>
+                                    <td style="cursor: pointer;" @onclick="() => ToggleDetails(pr)">
                                         @if (pr.Reviews != null)
                                         {
                                             @foreach (var review in pr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
@@ -159,7 +159,7 @@
                                     </td>
 
                                     @* Comments *@
-                                    <td>@(pr.Comments?.Count ?? 0)</td>
+                                    <td style="cursor: pointer;" @onclick="() => ToggleDetails(pr)">@(pr.Comments?.Count ?? 0)</td>
 
                                     @* Action buttons *@
                                     <td>
