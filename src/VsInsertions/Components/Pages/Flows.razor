@@ -1,0 +1,702 @@
+@page "/flows"
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.DataProtection
+@using System.Text.Json.Nodes
+@rendermode RenderMode.InteractiveServer
+@inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
+@inject NavigationManager NavigationManager
+@inject IHttpContextAccessor ContextAccessor
+@inject IDataProtectionProvider DataProtectionProvider
+@inject MaestroConfigService MaestroConfigService
+@inject GitHubFlowService GitHubFlowService
+
+<PageTitle>Flows</PageTitle>
+
+<h1>Arcade Flows</h1>
+
+@* === Azure DevOps PAT section (for maestro-configuration) === *@
+@if (!browser)
+{
+    <em>Checking access token...</em>
+}
+else
+{
+    <div class="my-2">
+        @if (string.IsNullOrEmpty(adoAccessToken))
+        {
+            <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <input type="password" class="form-control" placeholder="Azure DevOps PAT (dnceng scope)" @bind="adoAccessTokenInput" />
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary" @onclick="AdoLogInAsync">Log In (ADO)</button>
+                </div>
+            </div>
+
+            <details class="my-2">
+                <summary>How do I get the PAT?</summary>
+                <p>
+                    Use the
+                    <a href="https://dev.azure.com/dnceng/public/_artifacts/feed/dotnet-eng/NuGet/Microsoft.DncEng.PatGeneratorTool" target="_blank">PatGeneratorTool</a>:
+                </p>
+                <ol>
+                    <li>
+                        <CopyableCode Code="dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease" />
+                    </li>
+                    <li>
+                        <CopyableCode Code="pat-generator --scopes code_write --organizations dnceng --expires-in 7" />
+                    </li>
+                </ol>
+                <p>
+                    Alternatively, go to <a href="https://dev.azure.com/dnceng/_usersSettings/tokens" target="_blank">Azure DevOps &gt; PATs</a>
+                    and create a token with <code>Code (Read &amp; write)</code> permission for <code>dnceng</code> organization.
+                </p>
+            </details>
+        }
+        else
+        {
+            <button type="submit" class="btn btn-outline-primary me-2" @onclick="AdoLogOutAsync">Log Out (ADO)</button>
+        }
+    </div>
+
+    @* === GitHub OAuth section === *@
+    <div class="my-2">
+        @if (string.IsNullOrEmpty(gitHubToken))
+        {
+            <a href="/signin-github-start?returnUrl=/flows" class="btn btn-dark">
+                Sign in with GitHub
+            </a>
+            <small class="text-muted ms-2">Required for viewing and managing flow PRs</small>
+        }
+        else
+        {
+            <span class="badge bg-success me-2">GitHub: signed in</span>
+            <a href="/signout-github" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
+        }
+    </div>
+}
+
+@* === Load button === *@
+@if (!string.IsNullOrEmpty(adoAccessToken))
+{
+    <div class="my-2">
+        <button class="btn btn-primary me-2" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
+            @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
+        </button>
+
+        @if (subscriptionError != null)
+        {
+            <div class="alert alert-danger mt-2">@subscriptionError</div>
+        }
+    </div>
+}
+
+@* === Subscriptions display === *@
+@if (config != null)
+{
+    <div class="my-3">
+        <label class="me-1">Repository:</label>
+        <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo">
+            @foreach (var repo in repos)
+            {
+                <option value="@repo">@repo</option>
+            }
+        </select>
+
+        <span class="text-muted">@filteredSubscriptions.Count subscription(s)</span>
+    </div>
+
+    @if (filteredSubscriptions.Count > 0)
+    {
+        <h4>Subscriptions</h4>
+        <table class="table table-hover w-auto align-middle">
+            <thead>
+                <tr>
+                    <th>Source Repo</th>
+                    <th>Source Branch</th>
+                    <th>Channel</th>
+                    <th>Target Repo</th>
+                    <th>Target Branch</th>
+                    <th>Frequency</th>
+                    <th>Enabled</th>
+                    <th>Batchable</th>
+                    <th title="Merge Policies">Policies</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var sub in filteredSubscriptions)
+                {
+                    <tr>
+                        <td>@sub.SourceRepoShort</td>
+                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
+                        <td><span class="badge bg-info text-dark">@(sub.Channel ?? "—")</span></td>
+                        <td>@sub.TargetRepoShort</td>
+                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
+                        <td>@(sub.UpdateFrequency ?? "—")</td>
+                        <td>@(sub.Enabled ? "✔" : "✘")</td>
+                        <td>@(sub.Batchable ? "✔" : "—")</td>
+                        <td>@(sub.MergePolicies != null ? string.Join(", ", sub.MergePolicies) : "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @* === Flow PRs section === *@
+    @if (!string.IsNullOrEmpty(gitHubToken) && !string.IsNullOrEmpty(currentRepo) && currentRepo.StartsWith("dotnet/"))
+    {
+        <div class="my-3">
+            <h4>
+                Flow PRs
+                <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="LoadFlowPrsAsync" disabled="@loadingPrs">
+                    @(loadingPrs ? "Loading..." : "Load / Refresh")
+                </button>
+            </h4>
+
+            @if (prError != null)
+            {
+                <div class="alert alert-danger mt-2">@prError</div>
+            }
+
+            @if (flowPrs != null)
+            {
+                @if (flowPrs.Count == 0)
+                {
+                    <p class="text-muted">No open flow PRs found.</p>
+                }
+                else
+                {
+                    <table class="table table-hover w-auto align-middle">
+                        <thead>
+                            <tr>
+                                <th>PR #</th>
+                                <th title="State">S</th>
+                                <th>Title</th>
+                                <th>Target</th>
+                                <th>CI</th>
+                                <th>Reviews</th>
+                                <th title="Non-bot comments">💬</th>
+                                <th>Actions</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pr in flowPrs)
+                            {
+                                <tr>
+                                    <td><a href="@pr.Url" target="_blank">#@pr.Number</a></td>
+                                    <td title="@pr.State">@PrStateToEmoji(pr)</td>
+                                    <td title="@pr.Title" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        @TruncateTitle(pr.Title)
+                                    </td>
+                                    <td><code>@(pr.TargetBranch ?? "—")</code></td>
+
+                                    @* CI status *@
+                                    <td title="Click to expand CI details">
+                                        @if (!pr.DetailsLoaded)
+                                        {
+                                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadPrDetailsAsync(pr)">
+                                                Load
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span>@pr.CiSummary</span>
+                                        }
+                                    </td>
+
+                                    @* Reviews *@
+                                    <td>
+                                        @if (pr.Reviews != null)
+                                        {
+                                            @foreach (var review in pr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
+                                            {
+                                                @if (review.AvatarUrl != null)
+                                                {
+                                                    <img src="@review.AvatarUrl" title="@review.Author: @review.State"
+                                                         style="width: 1.2em; height: 1.2em; border-radius: 50%; border: 0.15em solid @ReviewStateToColor(review.State); margin-right: 2px;" />
+                                                }
+                                                else
+                                                {
+                                                    <span title="@review.Author: @review.State" style="color: @ReviewStateToColor(review.State);">
+                                                        @review.Author[..1]
+                                                    </span>
+                                                }
+                                            }
+                                        }
+                                    </td>
+
+                                    @* Comments *@
+                                    <td>@(pr.Comments?.Count ?? 0)</td>
+
+                                    @* Action buttons *@
+                                    <td>
+                                        @if (pr.State == "open" && !pr.Merged)
+                                        {
+                                            <button class="btn btn-success btn-sm me-1"
+                                                    @onclick="() => ApproveAndMergeAsync(pr)"
+                                                    disabled="@(pr == actionInProgressPr)"
+                                                    title="Approve, squash-merge, and delete branch">
+                                                @if (pr == actionInProgressPr && actionType == "merge")
+                                                {
+                                                    @:Merging...
+                                                }
+                                                else
+                                                {
+                                                    @:Approve & Merge
+                                                }
+                                            </button>
+
+                                            @if (pr.DetailsLoaded && pr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
+                                            {
+                                                <button class="btn btn-warning btn-sm"
+                                                        @onclick="() => RetryCiAsync(pr)"
+                                                        disabled="@(pr == actionInProgressPr)"
+                                                        title="Re-run failed CI checks">
+                                                    @if (pr == actionInProgressPr && actionType == "retry")
+                                                    {
+                                                        @:Retrying...
+                                                    }
+                                                    else
+                                                    {
+                                                        @:Retry CI
+                                                    }
+                                                </button>
+                                            }
+                                        }
+                                    </td>
+
+                                    @* Expand details *@
+                                    <td>
+                                        @if (pr.DetailsLoaded)
+                                        {
+                                            <button class="btn btn-outline-secondary btn-sm"
+                                                    @onclick="() => ToggleDetails(pr)"
+                                                    title="Show/hide details">
+                                                @(expandedPrs.Contains(pr.Number) ? "▲" : "▼")
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+
+                                @* Expanded details row *@
+                                @if (expandedPrs.Contains(pr.Number))
+                                {
+                                    <tr>
+                                        <td colspan="9">
+                                            <div class="p-2" style="background-color: #f8f9fa;">
+                                                @if (pr.CheckRuns is { Count: > 0 })
+                                                {
+                                                    <strong>CI Checks:</strong>
+                                                    <ul class="mb-2">
+                                                        @foreach (var check in pr.CheckRuns)
+                                                        {
+                                                            <li>
+                                                                @CheckConclusionToEmoji(check.Conclusion, check.Status)
+                                                                @if (check.Url != null)
+                                                                {
+                                                                    <a href="@check.Url" target="_blank">@check.Name</a>
+                                                                }
+                                                                else
+                                                                {
+                                                                    @check.Name
+                                                                }
+                                                                <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+
+                                                @if (pr.Comments is { Count: > 0 })
+                                                {
+                                                    <strong>Comments (non-bot):</strong>
+                                                    <ul class="mb-2">
+                                                        @foreach (var comment in pr.Comments)
+                                                        {
+                                                            <li>
+                                                                <strong>@comment.Author</strong>
+                                                                <small class="text-muted">@comment.CreatedAt.ToString("g")</small>:
+                                                                @comment.Body
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+
+                                                @if (pr.Reviews is { Count: > 0 })
+                                                {
+                                                    <strong>Reviews:</strong>
+                                                    <ul class="mb-0">
+                                                        @foreach (var review in pr.Reviews)
+                                                        {
+                                                            <li>
+                                                                <strong>@review.Author</strong>: @review.State
+                                                                @if (review.SubmittedAt.HasValue)
+                                                                {
+                                                                    <small class="text-muted">@review.SubmittedAt.Value.ToString("g")</small>
+                                                                }
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        </div>
+    }
+}
+
+@if (actionMessage != null)
+{
+    <div class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
+        @actionMessage
+        <button type="button" class="btn-close" @onclick="() => actionMessage = null"></button>
+    </div>
+}
+
+<script>
+    function getFlowsAdoTokenCookie() {
+        const name = "flows_ado_token=";
+        const decodedCookie = decodeURIComponent(document.cookie);
+        const cookies = decodedCookie.split(';');
+        for (const cookie of cookies) {
+            if (cookie.trim().startsWith(name)) {
+                return cookie.substring(name.length);
+            }
+        }
+        return "";
+    }
+
+    function setFlowsAdoTokenCookie(value) {
+        document.cookie = "flows_ado_token=" + value + ";secure;samesite=strict"
+    }
+</script>
+
+@code {
+    // === State ===
+    private bool browser;
+    private string? adoAccessTokenInput;
+    private string? adoAccessToken;
+    private string? gitHubToken;
+    private HttpClient adoClient = new();
+    private HttpClient gitHubClient = new();
+
+    // Subscriptions state.
+    private MaestroConfig? config;
+    private List<string> repos = [];
+    private string? currentRepo;
+    private bool loadingSubscriptions;
+    private string? subscriptionError;
+
+    // Flow PRs state.
+    private List<FlowPr>? flowPrs;
+    private bool loadingPrs;
+    private string? prError;
+    private HashSet<int> expandedPrs = [];
+
+    // Action state.
+    private FlowPr? actionInProgressPr;
+    private string? actionType;
+    private string? actionMessage;
+    private bool actionSuccess;
+
+    private List<ArcadeSubscription> filteredSubscriptions =>
+        config?.Subscriptions
+            .Where(s => string.Equals(s.SourceRepoShort, currentRepo, StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(s.TargetRepoShort, currentRepo, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Channel)
+            .ThenBy(s => s.SourceRepoShort)
+            .ToList() ?? [];
+
+    // === Lifecycle ===
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Read Azure DevOps PAT from cookie.
+            var encryptedAdoToken = await JSRuntime.InvokeAsync<string>("getFlowsAdoTokenCookie");
+            try
+            {
+                adoAccessToken = string.IsNullOrEmpty(encryptedAdoToken) ? null :
+                    DataProtectionProvider.CreateProtector("flows_ado_token").Unprotect(encryptedAdoToken);
+            }
+            catch
+            {
+                adoAccessToken = null;
+            }
+
+            // Read GitHub token from OAuth cookie.
+            var httpContext = ContextAccessor.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated == true)
+            {
+                gitHubToken = await httpContext.GetTokenAsync("access_token");
+            }
+
+            if (!string.IsNullOrEmpty(adoAccessToken))
+            {
+                SetupAdoClient();
+            }
+
+            if (!string.IsNullOrEmpty(gitHubToken))
+            {
+                SetupGitHubClient();
+            }
+
+            browser = true;
+            StateHasChanged();
+        }
+    }
+
+    // === ADO Auth ===
+    private async Task AdoLogInAsync()
+    {
+        if (string.IsNullOrEmpty(adoAccessTokenInput))
+            return;
+
+        var encrypted = DataProtectionProvider.CreateProtector("flows_ado_token").Protect(adoAccessTokenInput);
+        await JSRuntime.InvokeVoidAsync("setFlowsAdoTokenCookie", encrypted);
+        adoAccessToken = adoAccessTokenInput;
+        adoAccessTokenInput = null;
+        subscriptionError = null;
+        config = null;
+
+        SetupAdoClient();
+    }
+
+    private async Task AdoLogOutAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("setFlowsAdoTokenCookie", "");
+        adoAccessToken = null;
+        config = null;
+        flowPrs = null;
+    }
+
+    private void SetupAdoClient()
+    {
+        adoClient = new HttpClient();
+        adoClient.DefaultRequestHeaders.Remove("Authorization");
+        adoClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {adoAccessToken}");
+    }
+
+    private void SetupGitHubClient()
+    {
+        gitHubClient = new HttpClient();
+        gitHubClient.DefaultRequestHeaders.Remove("Authorization");
+        gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {gitHubToken}");
+        gitHubClient.DefaultRequestHeaders.Remove("User-Agent");
+        gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
+        gitHubClient.DefaultRequestHeaders.Remove("Accept");
+        gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+    }
+
+    // === Load Subscriptions ===
+    private async Task LoadSubscriptionsAsync()
+    {
+        loadingSubscriptions = true;
+        subscriptionError = null;
+        StateHasChanged();
+
+        try
+        {
+            config = await MaestroConfigService.GetConfigAsync(adoClient);
+            repos = MaestroConfigService.GetUniqueRepos(config.Subscriptions);
+            if (repos.Count > 0 && (currentRepo == null || !repos.Contains(currentRepo)))
+            {
+                // Default to dotnet/roslyn if available, otherwise first repo.
+                currentRepo = repos.FirstOrDefault(r => r.Equals("dotnet/roslyn", StringComparison.OrdinalIgnoreCase))
+                    ?? repos[0];
+            }
+            flowPrs = null; // Reset PRs when subscriptions change.
+        }
+        catch (Exception ex)
+        {
+            subscriptionError = $"Failed to load subscriptions: {ex.Message}";
+        }
+        finally
+        {
+            loadingSubscriptions = false;
+            StateHasChanged();
+        }
+    }
+
+    // === Load Flow PRs ===
+    private async Task LoadFlowPrsAsync()
+    {
+        if (string.IsNullOrEmpty(currentRepo))
+            return;
+
+        var parts = currentRepo.Split('/');
+        if (parts.Length != 2)
+            return;
+
+        loadingPrs = true;
+        prError = null;
+        expandedPrs.Clear();
+        StateHasChanged();
+
+        try
+        {
+            flowPrs = await GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
+            // Load details for all PRs.
+            foreach (var pr in flowPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+        }
+        catch (Exception ex)
+        {
+            prError = $"Failed to load flow PRs: {ex.Message}";
+        }
+        finally
+        {
+            loadingPrs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPrDetailsAsync(FlowPr pr)
+    {
+        if (string.IsNullOrEmpty(currentRepo))
+            return;
+
+        var parts = currentRepo.Split('/');
+        if (parts.Length != 2)
+            return;
+
+        await GitHubFlowService.LoadPrDetailsAsync(gitHubClient, parts[0], parts[1], pr);
+        StateHasChanged();
+    }
+
+    private async void LoadPrDetailsInBackground(FlowPr pr)
+    {
+        try
+        {
+            await LoadPrDetailsAsync(pr);
+        }
+        catch
+        {
+            // Swallow — details are optional.
+        }
+    }
+
+    // === Actions ===
+    private async Task ApproveAndMergeAsync(FlowPr pr)
+    {
+        if (string.IsNullOrEmpty(currentRepo))
+            return;
+
+        var parts = currentRepo.Split('/');
+        if (parts.Length != 2)
+            return;
+
+        actionInProgressPr = pr;
+        actionType = "merge";
+        actionMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var (success, message) = await GitHubFlowService.ApproveAndMergeAsync(gitHubClient, parts[0], parts[1], pr);
+            actionSuccess = success;
+            actionMessage = message;
+        }
+        catch (Exception ex)
+        {
+            actionSuccess = false;
+            actionMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            actionInProgressPr = null;
+            actionType = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RetryCiAsync(FlowPr pr)
+    {
+        if (string.IsNullOrEmpty(currentRepo))
+            return;
+
+        var parts = currentRepo.Split('/');
+        if (parts.Length != 2)
+            return;
+
+        actionInProgressPr = pr;
+        actionType = "retry";
+        actionMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var (success, message) = await GitHubFlowService.RetryCiAsync(gitHubClient, parts[0], parts[1], pr);
+            actionSuccess = success;
+            actionMessage = message;
+
+            // Refresh details after retry.
+            if (success)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+        }
+        catch (Exception ex)
+        {
+            actionSuccess = false;
+            actionMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            actionInProgressPr = null;
+            actionType = null;
+            StateHasChanged();
+        }
+    }
+
+    // === UI Helpers ===
+    private void ToggleDetails(FlowPr pr)
+    {
+        if (!expandedPrs.Remove(pr.Number))
+            expandedPrs.Add(pr.Number);
+    }
+
+    private static string PrStateToEmoji(FlowPr pr) => pr switch
+    {
+        { Merged: true } => "🟣",
+        { State: "open" } => "🟢",
+        { State: "closed" } => "🔴",
+        _ => "⚪",
+    };
+
+    private static string ReviewStateToColor(string state) => state switch
+    {
+        "APPROVED" => "green",
+        "CHANGES_REQUESTED" => "red",
+        "COMMENTED" => "orange",
+        "DISMISSED" => "gray",
+        _ => "lightgray",
+    };
+
+    private static string CheckConclusionToEmoji(string? conclusion, string status) => (conclusion, status) switch
+    {
+        ("success", _) => "✔",
+        ("failure", _) => "✘",
+        ("cancelled", _) => "⊘",
+        ("timed_out", _) => "⏰",
+        (null, "queued") => "⏳",
+        (null, "in_progress") => "🔄",
+        _ => "—",
+    };
+
+    private static string TruncateTitle(string title)
+    {
+        const int maxLength = 80;
+        if (title.Length <= maxLength) return title;
+        return title[..maxLength] + "…";
+    }
+}
