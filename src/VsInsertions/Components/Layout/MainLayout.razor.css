@@ -21,6 +21,13 @@ main {
     align-items: center;
 }
 
+    .top-row ::deep .page-title {
+        font-size: 1.25rem;
+        margin: 0;
+        flex: 1;
+        text-align: left;
+    }
+
     .top-row ::deep a, .top-row ::deep .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
