@@ -85,7 +85,7 @@
     @if (!string.IsNullOrEmpty(gitHubToken) && !string.IsNullOrEmpty(currentRepo) && currentRepo.StartsWith("dotnet/"))
     {
         <div class="my-3">
-            <h4>Incoming Flow PRs</h4>
+            <h4>Incoming Flow PRs @if (flowPrs != null) { <span class="text-muted fs-6">(@flowPrs.Count)</span> }</h4>
 
             @if (prError != null)
             {
@@ -285,7 +285,7 @@
 
         @* === Outgoing Flow PRs section === *@
         <div class="my-3">
-            <h4>Outgoing Flow PRs</h4>
+            <h4>Outgoing Flow PRs @if (outgoingFlowPrs != null) { <span class="text-muted fs-6">(@outgoingFlowPrs.Count)</span> }</h4>
 
             @if (outgoingPrError != null)
             {
