@@ -1,6 +1,5 @@
 using System.Text.Json.Nodes;
 using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace VsInsertions;
 
@@ -8,20 +7,19 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
 {
     private static readonly string BaseUrl =
         "https://dev.azure.com/dnceng/internal/_apis/git/repositories/maestro-configuration";
+    private const string Branch = "production";
 
     private readonly IDeserializer _yamlDeserializer = new DeserializerBuilder()
-        .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .IgnoreUnmatchedProperties()
         .Build();
 
     /// <summary>
-    /// Reads subscriptions and default channels from the maestro-configuration repo.
+    /// Reads subscriptions and default channels from the maestro-configuration repo (production branch).
     /// </summary>
     public async Task<MaestroConfig> GetConfigAsync(HttpClient client)
     {
-        // Get the repo tree to find YAML files.
-        var treeUrl = $"{BaseUrl}/items?recursionLevel=Full&api-version=6.0&versionDescriptor.version=main";
-        logger.LogInformation("Fetching maestro-configuration tree...");
+        var treeUrl = $"{BaseUrl}/items?recursionLevel=Full&api-version=6.0&versionDescriptor.version={Branch}";
+        logger.LogInformation("Fetching maestro-configuration tree (branch: {Branch})...", Branch);
         var treeJson = await client.GetStringAsync(treeUrl);
         var tree = JsonNode.Parse(treeJson);
 
@@ -30,115 +28,62 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
             .Where(item => !(item!["isFolder"]?.GetValue<bool>() ?? false))
             .Select(item => item!["path"]!.ToString())
             .ToList();
-        var nonEngFiles = allFiles.Where(p => !p.StartsWith("/eng/", StringComparison.OrdinalIgnoreCase)).ToList();
-        logger.LogInformation("Found {TotalItems} items in tree, {FileCount} files. Non-eng/ files: {Files}",
-            items.Count, allFiles.Count, string.Join(", ", nonEngFiles));
-        var yamlFiles = allFiles
-            .Where(p => p.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
-                     || p.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+
+        var subscriptionFiles = allFiles
+            .Where(p => p.StartsWith("/configuration/subscriptions/", StringComparison.OrdinalIgnoreCase)
+                     && (p.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+                      || p.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)))
             .ToList();
-        logger.LogInformation("{YamlCount} YAML files", yamlFiles.Count);
+        var defaultChannelFiles = allFiles
+            .Where(p => p.StartsWith("/configuration/default-channels/", StringComparison.OrdinalIgnoreCase)
+                     && (p.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+                      || p.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        logger.LogInformation("Found {SubFiles} subscription files and {DcFiles} default-channel files",
+            subscriptionFiles.Count, defaultChannelFiles.Count);
 
         var subscriptions = new List<ArcadeSubscription>();
         var defaultChannels = new List<DefaultChannel>();
 
-        foreach (var path in yamlFiles)
+        foreach (var path in subscriptionFiles)
         {
-
             try
             {
-                var fileUrl = $"{BaseUrl}/items?path={Uri.EscapeDataString(path)}&api-version=6.0&versionDescriptor.version=main";
+                var fileUrl = $"{BaseUrl}/items?path={Uri.EscapeDataString(path)}&api-version=6.0&versionDescriptor.version={Branch}";
                 var yamlContent = await client.GetStringAsync(fileUrl);
-                ParseYamlFile(path, yamlContent, subscriptions, defaultChannels);
+                var list = _yamlDeserializer.Deserialize<List<ArcadeSubscription>>(yamlContent);
+                if (list != null)
+                {
+                    foreach (var sub in list)
+                        sub.SourceFile = path;
+                    subscriptions.AddRange(list);
+                }
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to parse YAML file {Path}", path);
+                logger.LogWarning(ex, "Failed to parse subscription file {Path}", path);
+            }
+        }
+
+        foreach (var path in defaultChannelFiles)
+        {
+            try
+            {
+                var fileUrl = $"{BaseUrl}/items?path={Uri.EscapeDataString(path)}&api-version=6.0&versionDescriptor.version={Branch}";
+                var yamlContent = await client.GetStringAsync(fileUrl);
+                var list = _yamlDeserializer.Deserialize<List<DefaultChannel>>(yamlContent);
+                if (list != null)
+                    defaultChannels.AddRange(list);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to parse default-channel file {Path}", path);
             }
         }
 
         logger.LogInformation("Loaded {SubCount} subscriptions and {ChannelCount} default channels",
             subscriptions.Count, defaultChannels.Count);
         return new MaestroConfig(subscriptions, defaultChannels);
-    }
-
-    internal void ParseYamlFile(
-        string path,
-        string yamlContent,
-        List<ArcadeSubscription> subscriptions,
-        List<DefaultChannel> defaultChannels)
-    {
-        // maestro-configuration uses YAML files that can contain either a single subscription
-        // or a list of subscriptions, or default channel mappings.
-        // We try to detect the format by looking at the content.
-        var yaml = _yamlDeserializer.Deserialize<Dictionary<string, object>>(yamlContent);
-        if (yaml is null)
-            return;
-
-        if (yaml.ContainsKey("channel") && yaml.ContainsKey("sourceRepository"))
-        {
-            // Single subscription.
-            var sub = DeserializeSubscription(yamlContent, path);
-            if (sub != null)
-                subscriptions.Add(sub);
-        }
-        else if (yaml.ContainsKey("subscriptions"))
-        {
-            // List of subscriptions.
-            var doc = _yamlDeserializer.Deserialize<SubscriptionsDocument>(yamlContent);
-            if (doc?.Subscriptions != null)
-            {
-                foreach (var sub in doc.Subscriptions)
-                {
-                    sub.SourceFile = path;
-                    subscriptions.Add(sub);
-                }
-            }
-        }
-        else if (yaml.ContainsKey("defaultChannels"))
-        {
-            var doc = _yamlDeserializer.Deserialize<DefaultChannelsDocument>(yamlContent);
-            if (doc?.DefaultChannels != null)
-                defaultChannels.AddRange(doc.DefaultChannels);
-        }
-
-        // Also try to parse as a list at top level (some files might be plain YAML lists).
-        if (!yaml.ContainsKey("channel") && !yaml.ContainsKey("subscriptions") && !yaml.ContainsKey("defaultChannels"))
-        {
-            try
-            {
-                var list = _yamlDeserializer.Deserialize<List<ArcadeSubscription>>(yamlContent);
-                if (list != null)
-                {
-                    foreach (var sub in list)
-                    {
-                        sub.SourceFile = path;
-                        subscriptions.Add(sub);
-                    }
-                }
-            }
-            catch
-            {
-                // Not a list format, that's fine.
-                logger.LogDebug("File {Path} is not in a recognized subscription format", path);
-            }
-        }
-    }
-
-    private ArcadeSubscription? DeserializeSubscription(string yamlContent, string path)
-    {
-        try
-        {
-            var sub = _yamlDeserializer.Deserialize<ArcadeSubscription>(yamlContent);
-            if (sub != null)
-                sub.SourceFile = path;
-            return sub;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to deserialize subscription from {Path}", path);
-            return null;
-        }
     }
 
     /// <summary>
@@ -181,17 +126,40 @@ public sealed record MaestroConfig(
 
 public sealed class ArcadeSubscription
 {
+    [YamlMember(Alias = "Channel")]
     public string? Channel { get; set; }
+
+    [YamlMember(Alias = "Source Repository URL")]
     public string? SourceRepository { get; set; }
+
+    [YamlMember(Alias = "Target Repository URL")]
     public string? TargetRepository { get; set; }
+
+    [YamlMember(Alias = "Target Branch")]
     public string? TargetBranch { get; set; }
+
+    [YamlMember(Alias = "Source Directory")]
     public string? SourceDirectory { get; set; }
+
+    [YamlMember(Alias = "Target Directory")]
     public string? TargetDirectory { get; set; }
+
+    [YamlMember(Alias = "Update Frequency")]
     public string? UpdateFrequency { get; set; }
+
+    [YamlMember(Alias = "Source Enabled")]
     public bool Enabled { get; set; } = true;
+
+    [YamlMember(Alias = "Batchable")]
     public bool Batchable { get; set; }
-    public List<string>? MergePolicies { get; set; }
+
+    [YamlMember(Alias = "Merge Policies")]
+    public List<MergePolicy>? MergePolicies { get; set; }
+
+    [YamlMember(Alias = "Excluded Assets")]
     public List<string>? ExcludedAssets { get; set; }
+
+    [YamlMember(Alias = "Failure Notification Tags")]
     public string? FailureNotificationTags { get; set; }
 
     /// <summary>Path of the YAML file this subscription was parsed from.</summary>
@@ -205,21 +173,33 @@ public sealed class ArcadeSubscription
     /// <summary>Short display name for the target repo.</summary>
     [YamlIgnore]
     public string TargetRepoShort => string.IsNullOrEmpty(TargetRepository) ? "<unknown>" : MaestroConfigService.NormalizeRepoName(TargetRepository);
+
+    [YamlIgnore]
+    public string MergePolicySummary => MergePolicies is { Count: > 0 }
+        ? string.Join(", ", MergePolicies.Select(mp => mp.Name))
+        : "—";
+}
+
+public sealed class MergePolicy
+{
+    [YamlMember(Alias = "Name")]
+    public string? Name { get; set; }
+
+    [YamlMember(Alias = "Properties")]
+    public Dictionary<string, object>? Properties { get; set; }
 }
 
 public sealed class DefaultChannel
 {
+    [YamlMember(Alias = "Repository")]
     public string? Repository { get; set; }
+
+    [YamlMember(Alias = "Branch")]
     public string? Branch { get; set; }
+
+    [YamlMember(Alias = "Channel")]
     public string? Channel { get; set; }
-}
 
-internal sealed class SubscriptionsDocument
-{
-    public List<ArcadeSubscription>? Subscriptions { get; set; }
-}
-
-internal sealed class DefaultChannelsDocument
-{
-    public List<DefaultChannel>? DefaultChannels { get; set; }
+    [YamlMember(Alias = "Enabled")]
+    public bool Enabled { get; set; } = true;
 }

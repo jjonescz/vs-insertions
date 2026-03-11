@@ -1,32 +1,33 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using YamlDotNet.Serialization;
 
 namespace VsInsertions.Tests;
 
 public class MaestroConfigServiceTests
 {
-    private readonly MaestroConfigService _service = new(NullLogger<MaestroConfigService>.Instance);
+    private readonly IDeserializer _deserializer = new DeserializerBuilder()
+        .IgnoreUnmatchedProperties()
+        .Build();
 
     [Fact]
     public void ParseSingleSubscription()
     {
         var yaml = """
-            channel: .NET 11 Dev
-            sourceRepository: https://github.com/dotnet/roslyn
-            targetRepository: https://github.com/dotnet/dotnet
-            targetBranch: main
-            updateFrequency: EveryBuild
-            enabled: true
-            batchable: false
-            mergePolicies:
-              - Standard
+            - Channel: .NET 11 Dev
+              Source Repository URL: https://github.com/dotnet/roslyn
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: main
+              Update Frequency: EveryBuild
+              Source Enabled: true
+              Batchable: false
+              Merge Policies:
+              - Name: Standard
             """;
 
-        var subscriptions = new List<ArcadeSubscription>();
-        var defaultChannels = new List<DefaultChannel>();
-        _service.ParseYamlFile("/subscriptions/roslyn.yaml", yaml, subscriptions, defaultChannels);
+        var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
 
-        Assert.Single(subscriptions);
-        var sub = subscriptions[0];
+        Assert.Single(list);
+        var sub = list[0];
         Assert.Equal(".NET 11 Dev", sub.Channel);
         Assert.Equal("https://github.com/dotnet/roslyn", sub.SourceRepository);
         Assert.Equal("https://github.com/dotnet/dotnet", sub.TargetRepository);
@@ -34,83 +35,77 @@ public class MaestroConfigServiceTests
         Assert.Equal("EveryBuild", sub.UpdateFrequency);
         Assert.True(sub.Enabled);
         Assert.False(sub.Batchable);
-        Assert.Equal(["Standard"], sub.MergePolicies);
-        Assert.Equal("/subscriptions/roslyn.yaml", sub.SourceFile);
+        Assert.NotNull(sub.MergePolicies);
+        Assert.Single(sub.MergePolicies);
+        Assert.Equal("Standard", sub.MergePolicies[0].Name);
     }
 
     [Fact]
-    public void ParseSubscriptionsDocument()
+    public void ParseMultipleSubscriptions()
     {
         var yaml = """
-            subscriptions:
-              - channel: .NET 11 Dev
-                sourceRepository: https://github.com/dotnet/roslyn
-                targetRepository: https://github.com/dotnet/dotnet
-                targetBranch: main
-                updateFrequency: EveryBuild
-                enabled: true
-              - channel: .NET 11 Dev
-                sourceRepository: https://github.com/dotnet/razor
-                targetRepository: https://github.com/dotnet/dotnet
-                targetBranch: main
-                updateFrequency: EveryBuild
-                enabled: true
+            - Channel: .NET 11 Dev
+              Source Repository URL: https://github.com/dotnet/roslyn
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: main
+              Update Frequency: EveryBuild
+              Source Enabled: true
+            - Channel: .NET 11 Dev
+              Source Repository URL: https://github.com/dotnet/razor
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: main
+              Update Frequency: EveryBuild
+              Source Enabled: true
             """;
 
-        var subscriptions = new List<ArcadeSubscription>();
-        var defaultChannels = new List<DefaultChannel>();
-        _service.ParseYamlFile("/subs.yaml", yaml, subscriptions, defaultChannels);
+        var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
 
-        Assert.Equal(2, subscriptions.Count);
-        Assert.Equal("dotnet/roslyn", subscriptions[0].SourceRepoShort);
-        Assert.Equal("dotnet/razor", subscriptions[1].SourceRepoShort);
-        Assert.All(subscriptions, s => Assert.Equal("/subs.yaml", s.SourceFile));
+        Assert.Equal(2, list.Count);
+        Assert.Equal("dotnet/roslyn", list[0].SourceRepoShort);
+        Assert.Equal("dotnet/razor", list[1].SourceRepoShort);
     }
 
     [Fact]
-    public void ParseDefaultChannelsDocument()
+    public void ParseDefaultChannels()
     {
         var yaml = """
-            defaultChannels:
-              - repository: https://github.com/dotnet/roslyn
-                branch: main
-                channel: .NET 11 Dev
-              - repository: https://github.com/dotnet/razor
-                branch: main
-                channel: .NET 11 Dev
+            - Repository: https://github.com/dotnet/roslyn
+              Branch: main
+              Channel: .NET 11 Dev
+              Enabled: true
+            - Repository: https://github.com/dotnet/razor
+              Branch: main
+              Channel: .NET 11 Dev
+              Enabled: true
             """;
 
-        var subscriptions = new List<ArcadeSubscription>();
-        var defaultChannels = new List<DefaultChannel>();
-        _service.ParseYamlFile("/defaults.yaml", yaml, subscriptions, defaultChannels);
+        var list = _deserializer.Deserialize<List<DefaultChannel>>(yaml);
 
-        Assert.Empty(subscriptions);
-        Assert.Equal(2, defaultChannels.Count);
-        Assert.Equal("https://github.com/dotnet/roslyn", defaultChannels[0].Repository);
-        Assert.Equal("main", defaultChannels[0].Branch);
-        Assert.Equal(".NET 11 Dev", defaultChannels[0].Channel);
+        Assert.Equal(2, list.Count);
+        Assert.Equal("https://github.com/dotnet/roslyn", list[0].Repository);
+        Assert.Equal("main", list[0].Branch);
+        Assert.Equal(".NET 11 Dev", list[0].Channel);
+        Assert.True(list[0].Enabled);
     }
 
     [Fact]
     public void ParseDisabledSubscription()
     {
         var yaml = """
-            channel: VS 17.14
-            sourceRepository: https://github.com/dotnet/roslyn
-            targetRepository: https://github.com/dotnet/dotnet
-            targetBranch: release/17.14
-            updateFrequency: EveryDay
-            enabled: false
-            batchable: true
+            - Channel: VS 17.14
+              Source Repository URL: https://github.com/dotnet/roslyn
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: release/17.14
+              Update Frequency: EveryDay
+              Source Enabled: false
+              Batchable: true
             """;
 
-        var subscriptions = new List<ArcadeSubscription>();
-        var defaultChannels = new List<DefaultChannel>();
-        _service.ParseYamlFile("/disabled.yaml", yaml, subscriptions, defaultChannels);
+        var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
 
-        Assert.Single(subscriptions);
-        Assert.False(subscriptions[0].Enabled);
-        Assert.True(subscriptions[0].Batchable);
+        Assert.Single(list);
+        Assert.False(list[0].Enabled);
+        Assert.True(list[0].Batchable);
     }
 
     [Fact]
@@ -151,22 +146,43 @@ public class MaestroConfigServiceTests
     public void ParseWithExcludedAssets()
     {
         var yaml = """
-            channel: .NET 11 Dev
-            sourceRepository: https://github.com/dotnet/roslyn
-            targetRepository: https://github.com/dotnet/dotnet
-            targetBranch: main
-            updateFrequency: EveryBuild
-            enabled: true
-            excludedAssets:
+            - Channel: .NET 11 Dev
+              Source Repository URL: https://github.com/dotnet/roslyn
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: main
+              Update Frequency: EveryBuild
+              Source Enabled: true
+              Excluded Assets:
               - Microsoft.CodeAnalysis.Test.Utilities
               - Microsoft.CodeAnalysis.CSharp.Test.Utilities
             """;
 
-        var subscriptions = new List<ArcadeSubscription>();
-        var defaultChannels = new List<DefaultChannel>();
-        _service.ParseYamlFile("/excluded.yaml", yaml, subscriptions, defaultChannels);
+        var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
 
-        Assert.Single(subscriptions);
-        Assert.Equal(2, subscriptions[0].ExcludedAssets!.Count);
+        Assert.Single(list);
+        Assert.Equal(2, list[0].ExcludedAssets!.Count);
+    }
+
+    [Fact]
+    public void ParseMergePolicySummary()
+    {
+        var yaml = """
+            - Channel: .NET 11 Dev
+              Source Repository URL: https://github.com/dotnet/roslyn
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: main
+              Update Frequency: EveryBuild
+              Merge Policies:
+              - Name: AllChecksSuccessful
+                Properties:
+                  ignoreChecks:
+                  - roslyn-integration-corehost
+              - Name: Standard
+            """;
+
+        var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
+
+        Assert.Single(list);
+        Assert.Equal("AllChecksSuccessful, Standard", list[0].MergePolicySummary);
     }
 }
