@@ -258,25 +258,34 @@ else
 
                                         @if (pr.CheckRuns is { Count: > 0 })
                                         {
+                                            var nonSuccess = pr.CheckRuns.Where(c => c.Conclusion != "success").ToList();
+                                            var successCount = pr.CheckRuns.Count - nonSuccess.Count;
                                             <strong>CI Checks:</strong>
-                                            <ul class="mb-2">
-                                                @foreach (var check in pr.CheckRuns)
-                                                {
-                                                    <li>
-                                                        @CheckConclusionToEmoji(check.Conclusion, check.Status)
-                                                        @if (check.Url != null)
-                                                        {
-                                                            <a href="@check.Url" target="_blank">@check.Name</a>
-                                                        }
-                                                        else
-                                                        {
-                                                            @check.Name
-                                                        }
-                                                        @(" ")
-                                                        <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
-                                                    </li>
-                                                }
-                                            </ul>
+                                            @if (nonSuccess.Count > 0)
+                                            {
+                                                <ul class="mb-2">
+                                                    @foreach (var check in nonSuccess)
+                                                    {
+                                                        <li>
+                                                            @CheckConclusionToEmoji(check.Conclusion, check.Status)
+                                                            @if (check.Url != null)
+                                                            {
+                                                                <a href="@check.Url" target="_blank">@check.Name</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @check.Name
+                                                            }
+                                                            @(" ")
+                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                            @if (successCount > 0)
+                                            {
+                                                <div class="text-muted mb-2">✔ @successCount check(s) passed</div>
+                                            }
                                         }
 
                                         @if (pr.Comments is { Count: > 0 })
