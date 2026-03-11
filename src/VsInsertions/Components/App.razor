@@ -16,6 +16,16 @@
     <Routes />
     <script src="cookies.js"></script>
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        (function () {
+            var cb = document.getElementById('nav-toggle');
+            if (cb) {
+                cb.addEventListener('change', function () {
+                    setCookie('nav-collapsed', cb.checked ? '1' : '0');
+                });
+            }
+        })();
+    </script>
 </body>
 
 </html>

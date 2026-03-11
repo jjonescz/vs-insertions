@@ -1,5 +1,7 @@
-﻿<div class="nav-wrapper">
-    <input type="checkbox" id="nav-toggle" class="nav-toggle" />
+﻿@inject IHttpContextAccessor ContextAccessor
+
+<div class="nav-wrapper">
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" checked="@IsCollapsed" />
     <div class="nav-sidebar">
         <div class="top-row ps-3 navbar navbar-dark">
             <div class="container-fluid">
@@ -28,3 +30,8 @@
         </div>
     </div>
 </div>
+
+@code {
+    private bool IsCollapsed =>
+        ContextAccessor.HttpContext?.Request.Cookies["nav-collapsed"] == "1";
+}
