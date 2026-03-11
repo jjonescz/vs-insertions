@@ -79,10 +79,7 @@ else
 
                         @* Channel *@
                         <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(row.Subscription?.UpdateFrequency ?? "")">
-                            @if (row.Subscription != null)
-                            {
-                                <span class="badge bg-info text-dark">@(row.Subscription.Channel ?? "—")</span>
-                            }
+                            @(row.Subscription?.Channel ?? "—")
                         </td>
 
                         @* Source Branch *@
