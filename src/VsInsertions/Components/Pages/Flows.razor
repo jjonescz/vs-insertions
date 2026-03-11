@@ -52,6 +52,13 @@
             @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
         </button>
 
+        @if (config != null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        {
+            <button class="btn btn-outline-secondary me-2" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
+                @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Load / Refresh PRs")
+            </button>
+        }
+
         @if (subscriptionError != null)
         {
             <div class="alert alert-danger mt-2">@subscriptionError</div>
@@ -78,12 +85,7 @@
     @if (!string.IsNullOrEmpty(gitHubToken) && !string.IsNullOrEmpty(currentRepo) && currentRepo.StartsWith("dotnet/"))
     {
         <div class="my-3">
-            <h4>
-                Incoming Flow PRs
-                <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
-                    @(loadingPrs || loadingOutgoingPrs ? "Loading..." : "Load / Refresh")
-                </button>
-            </h4>
+            <h4>Incoming Flow PRs</h4>
 
             @if (prError != null)
             {
