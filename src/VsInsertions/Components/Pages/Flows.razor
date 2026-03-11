@@ -75,34 +75,17 @@
         <span class="text-muted">@filteredSubscriptions.Count subscription(s)</span>
     </div>
 
-    @* === Flow PRs section === *@
-    @if (!string.IsNullOrEmpty(gitHubToken) && !string.IsNullOrEmpty(currentRepo) && currentRepo.StartsWith("dotnet/"))
-    {
-        <div class="my-3">
-            <h4>Incoming Flow PRs @if (flowPrs != null) { <span class="text-muted fs-6">(@flowPrs.Count)</span> }</h4>
-            <FlowPrTable Prs="flowPrs" Loading="loadingPrs" Error="@prError"
-                         ExpandedPrs="expandedPrs" ActionInProgressPr="actionInProgressPr" ActionType="@actionType"
-                         OnLoadDetails="LoadPrDetailsAsync" OnApproveAndMerge="ApproveAndMergeAsync" OnRetryCi="RetryCiAsync" />
-        </div>
-
-        @* === Outgoing Flow PRs section === *@
-        <div class="my-3">
-            <h4>Outgoing Flow PRs @if (outgoingFlowPrs != null) { <span class="text-muted fs-6">(@outgoingFlowPrs.Count)</span> }</h4>
-            <FlowPrTable Prs="outgoingFlowPrs" Loading="loadingOutgoingPrs" Error="@outgoingPrError"
-                         ShowRepoColumn="true" ExpandedPrs="expandedPrs" ActionInProgressPr="actionInProgressPr" ActionType="@actionType"
-                         OnLoadDetails="LoadPrDetailsAsync" OnApproveAndMerge="ApproveAndMergeAsync" OnRetryCi="RetryCiAsync" />
-        </div>
-    }
-
-    @* === Incoming subscriptions === *@
-    <SubscriptionTable Title="Incoming Subscriptions" RepoColumnHeader="Source Repo"
-                       Subscriptions="incomingSubscriptions" RepoSelector="s => s.SourceRepoShort"
-                       ResolveSourceBranch="ResolveSourceBranch" />
-
-    @* === Outgoing subscriptions === *@
-    <SubscriptionTable Title="Outgoing Subscriptions" RepoColumnHeader="Target Repo"
-                       Subscriptions="outgoingSubscriptions" RepoSelector="s => s.TargetRepoShort"
-                       ResolveSourceBranch="ResolveSourceBranch" />
+    @* === Unified flows === *@
+    <UnifiedFlowTable Rows="unifiedRows"
+                      PrsAvailable="@(!string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)"
+                      PrError="@prError"
+                      OutgoingPrError="@outgoingPrError"
+                      ExpandedPrs="expandedPrs"
+                      ActionInProgressPr="actionInProgressPr"
+                      ActionType="@actionType"
+                      OnLoadDetails="LoadPrDetailsAsync"
+                      OnApproveAndMerge="ApproveAndMergeAsync"
+                      OnRetryCi="RetryCiAsync" />
 }
 
 @if (actionMessage != null)
@@ -478,6 +461,113 @@
                 StringComparison.OrdinalIgnoreCase));
     }
 
+    // === Unified flow rows ===
 
+    private List<UnifiedFlowRow> unifiedRows => BuildUnifiedFlowRows();
+
+    private List<UnifiedFlowRow> BuildUnifiedFlowRows()
+    {
+        if (config is null)
+            return [];
+
+        var rows = new List<UnifiedFlowRow>();
+        var matchedIncomingPrNumbers = new HashSet<int>();
+        var matchedOutgoingPrNumbers = new HashSet<int>();
+
+        // Incoming subscriptions (other → selected repo).
+        foreach (var sub in incomingSubscriptions)
+        {
+            var matched = (flowPrs ?? [])
+                .Where(pr => pr.Title.Contains(sub.SourceRepoShort, StringComparison.OrdinalIgnoreCase)
+                    && (pr.TargetBranch is null || string.Equals(pr.TargetBranch, sub.TargetBranch, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(pr => pr.Number)
+                .ToList();
+            foreach (var pr in matched)
+                matchedIncomingPrNumbers.Add(pr.Number);
+
+            rows.Add(new UnifiedFlowRow
+            {
+                OtherRepo = sub.SourceRepoShort,
+                IsIncoming = true,
+                Subscription = sub,
+                SourceBranch = ResolveSourceBranch(sub),
+                Prs = matched,
+            });
+        }
+
+        // Outgoing subscriptions (selected repo → other).
+        foreach (var sub in outgoingSubscriptions)
+        {
+            var matched = (outgoingFlowPrs ?? [])
+                .Where(pr => string.Equals(pr.Repo, sub.TargetRepoShort, StringComparison.OrdinalIgnoreCase)
+                    && (pr.TargetBranch is null || string.Equals(pr.TargetBranch, sub.TargetBranch, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(pr => pr.Number)
+                .ToList();
+            foreach (var pr in matched)
+                matchedOutgoingPrNumbers.Add(pr.Number);
+
+            rows.Add(new UnifiedFlowRow
+            {
+                OtherRepo = sub.TargetRepoShort,
+                IsIncoming = false,
+                Subscription = sub,
+                SourceBranch = ResolveSourceBranch(sub),
+                Prs = matched,
+            });
+        }
+
+        // Unmatched incoming PRs.
+        if (flowPrs != null)
+        {
+            foreach (var pr in flowPrs.Where(p => !matchedIncomingPrNumbers.Contains(p.Number)))
+            {
+                rows.Add(new UnifiedFlowRow
+                {
+                    OtherRepo = ExtractSourceRepoFromTitle(pr.Title) ?? "unknown",
+                    IsIncoming = true,
+                    Prs = [pr],
+                });
+            }
+        }
+
+        // Unmatched outgoing PRs.
+        if (outgoingFlowPrs != null)
+        {
+            foreach (var pr in outgoingFlowPrs.Where(p => !matchedOutgoingPrNumbers.Contains(p.Number)))
+            {
+                rows.Add(new UnifiedFlowRow
+                {
+                    OtherRepo = pr.Repo,
+                    IsIncoming = false,
+                    Prs = [pr],
+                });
+            }
+        }
+
+        return rows
+            .OrderBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.IsIncoming ? 0 : 1)
+            .ThenBy(r => r.Subscription?.Channel)
+            .ThenBy(r => r.Subscription?.TargetBranch)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Extracts the source repo from a maestro PR title like
+    /// "[main] Update dependencies from dotnet/runtime".
+    /// </summary>
+    private static string? ExtractSourceRepoFromTitle(string title)
+    {
+        var idx = title.IndexOf("from ", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            var rest = title.AsSpan()[(idx + 5)..].Trim();
+            var end = rest.IndexOf(' ');
+            var token = end >= 0 ? rest[..end] : rest;
+            if (token.IndexOf('/') >= 0)
+                return token.ToString();
+        }
+        return null;
+    }
 
 }
