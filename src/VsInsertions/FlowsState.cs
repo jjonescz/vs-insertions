@@ -5,6 +5,7 @@ namespace VsInsertions;
 /// </summary>
 public sealed class FlowsState
 {
+    public string? AdoAccessToken { get; set; }
     public MaestroConfig? Config { get; set; }
     public List<string> Repos { get; set; } = [];
     public string? CurrentRepo { get; set; }

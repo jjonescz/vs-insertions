@@ -390,11 +390,16 @@
         if (token != null)
         {
             subscriptionError = null;
-            config = null;
+            if (FlowsState.AdoAccessToken != token)
+            {
+                FlowsState.AdoAccessToken = token;
+                config = null;
+            }
             SetupAdoClient();
         }
         else
         {
+            FlowsState.AdoAccessToken = null;
             config = null;
             flowPrs = null;
         }
