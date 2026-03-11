@@ -653,15 +653,21 @@
         if (config is null || string.IsNullOrEmpty(sub.SourceRepository) || string.IsNullOrEmpty(sub.Channel))
             return null;
 
-        var dc = config.DefaultChannels.FirstOrDefault(dc =>
-            dc.Enabled
-            && string.Equals(dc.Channel, sub.Channel, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(
-                MaestroConfigService.NormalizeRepoName(dc.Repository ?? ""),
-                sub.SourceRepoShort,
-                StringComparison.OrdinalIgnoreCase));
+        var dc = FindDefaultChannel(sub.SourceRepoShort, sub.Channel)
+              ?? FindDefaultChannel(sub.SourceRepoShort, sub.Channel + " - Validation");
 
         return dc?.Branch;
+    }
+
+    private DefaultChannel? FindDefaultChannel(string sourceRepoShort, string channel)
+    {
+        return config?.DefaultChannels.FirstOrDefault(dc =>
+            dc.Enabled
+            && string.Equals(dc.Channel, channel, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                MaestroConfigService.NormalizeRepoName(dc.Repository ?? ""),
+                sourceRepoShort,
+                StringComparison.OrdinalIgnoreCase));
     }
 
     private static string PrStateToEmoji(FlowPr pr) => pr switch
