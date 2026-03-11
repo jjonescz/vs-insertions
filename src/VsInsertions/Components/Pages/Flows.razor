@@ -18,6 +18,14 @@
     <h1 class="page-title">Arcade Flows</h1>
 </SectionContent>
 
+@if (actionMessage != null)
+{
+    <div class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
+        @actionMessage
+        <button type="button" class="btn-close" @onclick="() => actionMessage = null"></button>
+    </div>
+}
+
 @* === Auth & Load controls === *@
 <div class="my-2 d-flex flex-wrap align-items-center gap-2">
     <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
@@ -86,14 +94,6 @@
                       OnApprove="ApproveAsync"
                       OnMerge="MergeAsync"
                       OnRetryCi="RetryCiAsync" />
-}
-
-@if (actionMessage != null)
-{
-    <div class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
-        @actionMessage
-        <button type="button" class="btn-close" @onclick="() => actionMessage = null"></button>
-    </div>
 }
 
 
