@@ -274,23 +274,6 @@ else
     <p></p>
 }
 
-<script>
-    function getAccessTokenCookie() {
-        const name = "access_token=";
-        const decodedCookie = decodeURIComponent(document.cookie);
-        const cookies = decodedCookie.split(';');
-        for (const cookie of cookies) {
-            if (cookie.trim().startsWith(name)) {
-                return cookie.substring(name.length);
-            }
-        }
-        return "";
-    }
-
-    function setAccessTokenCookie(value) {
-        document.cookie = "access_token=" + value + ";secure;samesite=strict"
-    }
-</script>
 
 @code {
     private static readonly int numberOfRecentRpsToLoad = 10;

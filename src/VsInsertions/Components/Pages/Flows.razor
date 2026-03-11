@@ -363,23 +363,6 @@ else
     </div>
 }
 
-<script>
-    function getFlowsAdoTokenCookie() {
-        const name = "flows_ado_token=";
-        const decodedCookie = decodeURIComponent(document.cookie);
-        const cookies = decodedCookie.split(';');
-        for (const cookie of cookies) {
-            if (cookie.trim().startsWith(name)) {
-                return cookie.substring(name.length);
-            }
-        }
-        return "";
-    }
-
-    function setFlowsAdoTokenCookie(value) {
-        document.cookie = "flows_ado_token=" + value + ";secure;samesite=strict"
-    }
-</script>
 
 @code {
     // === State ===
