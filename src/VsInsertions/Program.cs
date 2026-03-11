@@ -18,20 +18,26 @@ builder.Services.AddSingleton<RpsParser>();
 builder.Services.AddSingleton<MaestroConfigService>();
 builder.Services.AddSingleton<GitHubFlowService>();
 
-// GitHub OAuth.
-builder.Services.AddAuthentication(options =>
+// GitHub OAuth (only when credentials are configured).
+var gitHubClientId = builder.Configuration["GitHub:ClientId"];
+var gitHubClientSecret = builder.Configuration["GitHub:ClientSecret"];
+var authBuilder = builder.Services.AddAuthentication(options =>
     {
         options.DefaultScheme = "Cookies";
         options.DefaultChallengeScheme = "GitHub";
     })
-    .AddCookie("Cookies")
-    .AddGitHub("GitHub", options =>
+    .AddCookie("Cookies");
+
+if (!string.IsNullOrEmpty(gitHubClientId) && !string.IsNullOrEmpty(gitHubClientSecret))
+{
+    authBuilder.AddGitHub("GitHub", options =>
     {
-        options.ClientId = builder.Configuration["GitHub:ClientId"] ?? "missing";
-        options.ClientSecret = builder.Configuration["GitHub:ClientSecret"] ?? "missing";
+        options.ClientId = gitHubClientId;
+        options.ClientSecret = gitHubClientSecret;
         options.Scope.Add("public_repo");
         options.SaveTokens = true;
     });
+}
 
 var app = builder.Build();
 
