@@ -10,6 +10,7 @@
 @inject IDataProtectionProvider DataProtectionProvider
 @inject MaestroConfigService MaestroConfigService
 @inject GitHubFlowService GitHubFlowService
+@inject ILogger<Flows> Logger
 
 <PageTitle>Flows</PageTitle>
 
@@ -426,8 +427,9 @@ else
                 adoAccessToken = string.IsNullOrEmpty(encryptedAdoToken) ? null :
                     DataProtectionProvider.CreateProtector("flows_ado_token").Unprotect(encryptedAdoToken);
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.LogError(ex, "Failed to unprotect ADO token");
                 adoAccessToken = null;
             }
 
@@ -516,6 +518,7 @@ else
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to load subscriptions");
             subscriptionError = $"Failed to load subscriptions: {ex.Message}";
         }
         finally
@@ -551,6 +554,7 @@ else
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to load flow PRs");
             prError = $"Failed to load flow PRs: {ex.Message}";
         }
         finally
@@ -579,9 +583,10 @@ else
         {
             await LoadPrDetailsAsync(pr);
         }
-        catch
+        catch (Exception ex)
         {
             // Swallow — details are optional.
+            Logger.LogError(ex, "Failed to load PR details");
         }
     }
 
@@ -608,6 +613,7 @@ else
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to approve and merge PR");
             actionSuccess = false;
             actionMessage = $"Error: {ex.Message}";
         }
@@ -647,6 +653,7 @@ else
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to retry CI");
             actionSuccess = false;
             actionMessage = $"Error: {ex.Message}";
         }
