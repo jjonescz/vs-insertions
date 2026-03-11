@@ -538,7 +538,9 @@
         }
 
         // Outgoing subscriptions (selected repo → other).
-        foreach (var sub in outgoingSubscriptions)
+        // Skip circular subscriptions (source == target) as they are already handled above.
+        foreach (var sub in outgoingSubscriptions.Where(s =>
+            !string.Equals(s.SourceRepoShort, s.TargetRepoShort, StringComparison.OrdinalIgnoreCase)))
         {
             var matched = (outgoingFlowPrs ?? [])
                 .Where(pr => string.Equals(pr.Repo, sub.TargetRepoShort, StringComparison.OrdinalIgnoreCase)

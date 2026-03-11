@@ -45,15 +45,19 @@ else
             {
                 var inCount = group.Count(r => r.IsIncoming);
                 var outCount = group.Count(r => !r.IsIncoming);
+                var circularCount = group.Count(r => IsCircular(r));
                 var prCount = group.Sum(r => r.Prs.Count);
-                var dirSymbol = (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
+                var dirSymbol = circularCount == group.Count() ? "⇄" : (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
 
                 <tr class="table-light">
                     <td colspan="@totalCols">
                         <strong>@dirSymbol @group.Key</strong>
                         <small class="text-muted ms-2">
-                            @if (inCount > 0) { <text>@inCount incoming</text> }
-                            @if (inCount > 0 && outCount > 0) { <text> · </text> }
+                            @{ var pureInCount = inCount - circularCount; }
+                            @if (circularCount > 0) { <text>@circularCount circular</text> }
+                            @if (circularCount > 0 && (pureInCount > 0 || outCount > 0)) { <text> · </text> }
+                            @if (pureInCount > 0) { <text>@pureInCount incoming</text> }
+                            @if (pureInCount > 0 && outCount > 0) { <text> · </text> }
                             @if (outCount > 0) { <text>@outCount outgoing</text> }
                             @if (PrsAvailable && prCount > 0) { <text> · @prCount PR(s)</text> }
                         </small>
@@ -67,8 +71,12 @@ else
 
                     <tr>
                         @* Direction *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : (row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)"))">
-                            @if (row.IsIncoming)
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : (IsCircular(row) ? "Circular (self → self)" : row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)"))">
+                            @if (IsCircular(row))
+                            {
+                                <span class="badge bg-info text-dark">⇄</span>
+                            }
+                            else if (row.IsIncoming)
                             {
                                 <span class="badge bg-success">←</span>
                             }
@@ -370,6 +378,10 @@ else
         "DISMISSED" => "gray",
         _ => "lightgray",
     };
+
+    private static bool IsCircular(UnifiedFlowRow row) =>
+        row.Subscription != null &&
+        string.Equals(row.Subscription.SourceRepoShort, row.Subscription.TargetRepoShort, StringComparison.OrdinalIgnoreCase);
 
     private static string CheckConclusionToEmoji(string? conclusion, string status) => (conclusion, status) switch
     {
