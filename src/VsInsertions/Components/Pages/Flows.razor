@@ -282,30 +282,59 @@
         </div>
     }
 
-    @* === Subscriptions display === *@
-    @if (filteredSubscriptions.Count > 0)
+    @* === Incoming subscriptions === *@
+    @if (incomingSubscriptions.Count > 0)
     {
-        <h4>Subscriptions</h4>
+        <h4>Incoming Subscriptions <span class="text-muted fs-6">(@incomingSubscriptions.Count)</span></h4>
         <table class="table table-hover w-auto align-middle">
             <thead>
                 <tr>
                     <th>Source Repo</th>
                     <th>Source Branch</th>
                     <th>Channel</th>
-                    <th>Target Repo</th>
                     <th>Target Branch</th>
                     <th>Frequency</th>
                     <th>Enabled</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var sub in filteredSubscriptions)
+                @foreach (var sub in incomingSubscriptions)
                 {
                     <tr>
                         <td>@sub.SourceRepoShort</td>
-                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
+                        <td><code>@(ResolveSourceBranch(sub) ?? "—")</code></td>
                         <td><span class="badge bg-info text-dark">@(sub.Channel ?? "—")</span></td>
+                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
+                        <td>@(sub.UpdateFrequency ?? "—")</td>
+                        <td>@(sub.Enabled ? "✔" : "✘")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @* === Outgoing subscriptions === *@
+    @if (outgoingSubscriptions.Count > 0)
+    {
+        <h4>Outgoing Subscriptions <span class="text-muted fs-6">(@outgoingSubscriptions.Count)</span></h4>
+        <table class="table table-hover w-auto align-middle">
+            <thead>
+                <tr>
+                    <th>Target Repo</th>
+                    <th>Source Branch</th>
+                    <th>Channel</th>
+                    <th>Target Branch</th>
+                    <th>Frequency</th>
+                    <th>Enabled</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var sub in outgoingSubscriptions)
+                {
+                    <tr>
                         <td>@sub.TargetRepoShort</td>
+                        <td><code>@(ResolveSourceBranch(sub) ?? "—")</code></td>
+                        <td><span class="badge bg-info text-dark">@(sub.Channel ?? "—")</span></td>
                         <td><code>@(sub.TargetBranch ?? "—")</code></td>
                         <td>@(sub.UpdateFrequency ?? "—")</td>
                         <td>@(sub.Enabled ? "✔" : "✘")</td>
@@ -360,6 +389,16 @@
             .OrderBy(s => s.Channel)
             .ThenBy(s => s.SourceRepoShort)
             .ToList() ?? [];
+
+    private List<ArcadeSubscription> incomingSubscriptions =>
+        filteredSubscriptions
+            .Where(s => string.Equals(s.TargetRepoShort, currentRepo, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private List<ArcadeSubscription> outgoingSubscriptions =>
+        filteredSubscriptions
+            .Where(s => string.Equals(s.SourceRepoShort, currentRepo, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
     // === Lifecycle ===
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -603,6 +642,26 @@
     {
         if (!expandedPrs.Remove(pr.Number))
             expandedPrs.Add(pr.Number);
+    }
+
+    /// <summary>
+    /// Resolves the source branch for a subscription by looking up the default channel
+    /// that matches the subscription's source repository and channel.
+    /// </summary>
+    private string? ResolveSourceBranch(ArcadeSubscription sub)
+    {
+        if (config is null || string.IsNullOrEmpty(sub.SourceRepository) || string.IsNullOrEmpty(sub.Channel))
+            return null;
+
+        var dc = config.DefaultChannels.FirstOrDefault(dc =>
+            dc.Enabled
+            && string.Equals(dc.Channel, sub.Channel, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                MaestroConfigService.NormalizeRepoName(dc.Repository ?? ""),
+                sub.SourceRepoShort,
+                StringComparison.OrdinalIgnoreCase));
+
+        return dc?.Branch;
     }
 
     private static string PrStateToEmoji(FlowPr pr) => pr switch
