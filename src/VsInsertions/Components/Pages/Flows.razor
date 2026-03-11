@@ -18,52 +18,46 @@
     <h1 class="page-title">Arcade Flows</h1>
 </SectionContent>
 
-@* === Azure DevOps PAT section (for maestro-configuration) === *@
-<div class="my-2">
+@* === Auth & Load controls === *@
+<div class="my-2 d-flex flex-wrap align-items-center gap-2">
     <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
               AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
               LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
-</div>
 
-@* === GitHub OAuth section === *@
-@if (browser)
-{
-    <div class="my-2">
+    @if (browser)
+    {
         @if (string.IsNullOrEmpty(gitHubToken))
         {
             <a href="/signin-github-start?returnUrl=/flows" class="btn btn-dark">
                 Sign in with GitHub
             </a>
-            <small class="text-muted ms-2">Required for viewing and managing flow PRs</small>
+            <small class="text-muted">Required for viewing and managing flow PRs</small>
         }
         else
         {
-            <span class="badge bg-success me-2">GitHub: @(gitHubUser ?? "signed in")</span>
+            <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
             <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
         }
-    </div>
-}
+    }
 
-@* === Load button === *@
-@if (!string.IsNullOrEmpty(adoAccessToken))
-{
-    <div class="my-2">
-        <button class="btn btn-primary me-2" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
+    @if (!string.IsNullOrEmpty(adoAccessToken))
+    {
+        <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
             @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
         </button>
 
         @if (config != null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
-            <button class="btn btn-outline-secondary me-2" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
+            <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
                 @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Load / Refresh PRs")
             </button>
         }
+    }
+</div>
 
-        @if (subscriptionError != null)
-        {
-            <div class="alert alert-danger mt-2">@subscriptionError</div>
-        }
-    </div>
+@if (subscriptionError != null)
+{
+    <div class="alert alert-danger mt-2">@subscriptionError</div>
 }
 
 @* === Subscriptions display === *@
