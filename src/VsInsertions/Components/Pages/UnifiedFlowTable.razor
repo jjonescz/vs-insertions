@@ -105,7 +105,9 @@ else
                                     <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
                                     @if (row.Prs.Count > 1)
                                     {
-                                        <span class="badge bg-secondary ms-1" title="@row.Prs.Count open PRs">+@(row.Prs.Count - 1)</span>
+                                        <span class="badge bg-secondary ms-1" style="cursor: pointer;"
+                                              title="Click to show all @row.Prs.Count open PRs"
+                                              @onclick="() => ToggleDetails(primaryPr)">+@(row.Prs.Count - 1)</span>
                                     }
                                 </td>
 
