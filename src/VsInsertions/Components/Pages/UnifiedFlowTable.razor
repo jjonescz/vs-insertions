@@ -68,19 +68,19 @@ else
 
                     <tr>
                         @* Direction *@
-                        <td>
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : (row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)"))">
                             @if (row.IsIncoming)
                             {
-                                <span class="badge bg-success" title="Incoming (other → selected)">←</span>
+                                <span class="badge bg-success">←</span>
                             }
                             else
                             {
-                                <span class="badge bg-warning text-dark" title="Outgoing (selected → other)">→</span>
+                                <span class="badge bg-warning text-dark">→</span>
                             }
                         </td>
 
                         @* Channel *@
-                        <td>
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">
                             @if (row.Subscription != null)
                             {
                                 <span class="badge bg-info text-dark">@(row.Subscription.Channel ?? "—")</span>
@@ -88,16 +88,16 @@ else
                         </td>
 
                         @* Source Branch *@
-                        <td><code>@(row.SourceBranch ?? "—")</code></td>
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")"><code>@(row.SourceBranch ?? "—")</code></td>
 
                         @* Target Branch *@
-                        <td><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
 
                         @* Frequency *@
-                        <td>@(row.Subscription?.UpdateFrequency ?? "—")</td>
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">@(row.Subscription?.UpdateFrequency ?? "—")</td>
 
                         @* Enabled *@
-                        <td>@(row.Subscription != null ? (row.Subscription.Enabled ? "✔" : "✘") : "")</td>
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">@(row.Subscription != null ? (row.Subscription.Enabled ? "✔" : "✘") : "")</td>
 
                         @if (PrsAvailable)
                         {
@@ -113,7 +113,7 @@ else
                                 </td>
 
                                 @* CI *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)">
+                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">
                                     @if (!primaryPr.DetailsLoaded)
                                     {
                                         <button class="btn btn-outline-secondary btn-sm"
@@ -129,7 +129,7 @@ else
                                 </td>
 
                                 @* Reviews *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)">
+                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">
                                     @if (primaryPr.Reviews != null)
                                     {
                                         @foreach (var review in primaryPr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
@@ -150,7 +150,7 @@ else
                                 </td>
 
                                 @* Comments *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)">@(primaryPr.Comments?.Count ?? 0)</td>
+                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">@(primaryPr.Comments?.Count ?? 0)</td>
 
                                 @* Actions *@
                                 <td>
@@ -195,7 +195,7 @@ else
                                     {
                                         <button class="btn btn-outline-secondary btn-sm"
                                                 @onclick="() => ToggleDetails(primaryPr)"
-                                                title="Show/hide details">
+                                                title="Click to expand/collapse details">
                                             @(isExpanded ? "▲" : "▼")
                                         </button>
                                     }
