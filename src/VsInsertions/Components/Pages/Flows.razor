@@ -98,7 +98,6 @@
                         <thead>
                             <tr>
                                 <th>PR #</th>
-                                <th title="State">S</th>
                                 <th>Target</th>
                                 <th>CI</th>
                                 <th title="Reviews">👀</th>
@@ -112,7 +111,6 @@
                             {
                                 <tr>
                                     <td><a href="@pr.Url" target="_blank" title="@pr.Title">#@pr.Number</a></td>
-                                    <td title="@pr.State">@PrStateToEmoji(pr)</td>
                                     <td><code>@(pr.TargetBranch ?? "—")</code></td>
 
                                     @* CI status *@
@@ -207,7 +205,7 @@
                                 @if (expandedPrs.Contains(pr.Number))
                                 {
                                     <tr>
-                                        <td colspan="8">
+                                        <td colspan="7">
                                             <div class="p-2" style="background-color: #f8f9fa;">
                                                 <strong>Title:</strong> @pr.Title<br/>
 
@@ -300,7 +298,6 @@
                         <thead>
                             <tr>
                                 <th>PR #</th>
-                                <th title="State">S</th>
                                 <th>Target Repo</th>
                                 <th>Target</th>
                                 <th>CI</th>
@@ -315,7 +312,6 @@
                             {
                                 <tr>
                                     <td><a href="@pr.Url" target="_blank" title="@pr.Title">#@pr.Number</a></td>
-                                    <td title="@pr.State">@PrStateToEmoji(pr)</td>
                                     <td><code>@pr.Repo</code></td>
                                     <td><code>@(pr.TargetBranch ?? "—")</code></td>
 
@@ -411,7 +407,7 @@
                                 @if (expandedPrs.Contains(pr.Number))
                                 {
                                     <tr>
-                                        <td colspan="9">
+                                        <td colspan="8">
                                             <div class="p-2" style="background-color: #f8f9fa;">
                                                 <strong>Title:</strong> @pr.Title
 
@@ -915,13 +911,7 @@
                 StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string PrStateToEmoji(FlowPr pr) => pr switch
-    {
-        { Merged: true } => "🟣",
-        { State: "open" } => "🟢",
-        { State: "closed" } => "🔴",
-        _ => "⚪",
-    };
+
 
     private static string ReviewStateToColor(string state) => state switch
     {
