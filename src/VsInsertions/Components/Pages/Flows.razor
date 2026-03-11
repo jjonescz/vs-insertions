@@ -20,7 +20,13 @@
 
 @if (actionMessage != null)
 {
-    <div class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
+    <a href="javascript:void(0)" @onclick="ScrollToAlert" @onclick:preventDefault
+       title="@actionMessage"
+       style="position: fixed; top: 0.6rem; right: 10rem; z-index: 2; font-size: 1.3rem; cursor: pointer; text-decoration: none;">
+        @(actionSuccess ? "\u2705" : "\u26A0\uFE0F")
+    </a>
+
+    <div id="action-alert" class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
         @actionMessage
         <button type="button" class="btn-close" @onclick="() => actionMessage = null"></button>
     </div>
@@ -502,6 +508,11 @@
     }
 
     // === UI Helpers ===
+
+    private async Task ScrollToAlert()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+    }
 
     /// <summary>
     /// Resolves the source branch for a subscription by looking up the default channel
