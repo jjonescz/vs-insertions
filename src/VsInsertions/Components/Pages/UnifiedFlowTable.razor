@@ -19,7 +19,7 @@ else
         .GroupBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
         .ToList();
-    var totalCols = PrsAvailable ? 10 : 4;
+    var totalCols = PrsAvailable ? 11 : 4;
 
     <table class="table table-hover w-auto align-middle">
         <thead>
@@ -31,6 +31,7 @@ else
                 @if (PrsAvailable)
                 {
                     <th>PR</th>
+                    <th>Date</th>
                     <th>CI</th>
                     <th title="Reviews">👀</th>
                     <th title="Non-bot comments">💬</th>
@@ -103,6 +104,11 @@ else
                                               title="Click to show all @row.Prs.Count PRs"
                                               @onclick="() => ToggleDetails(primaryPr)">+@(row.Prs.Count - 1)</span>
                                     }
+                                </td>
+
+                                @* Date *@
+                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="@(primaryPr.UpdatedAt.HasValue ? $"Updated: {primaryPr.UpdatedAt.Value:g}" : "Click to expand/collapse details")">
+                                    <small>@primaryPr.CreatedAt.ToString("d")</small>
                                 </td>
 
                                 @* CI *@
@@ -184,6 +190,7 @@ else
                             {
                                 @* No PRs matched *@
                                 <td class="text-muted">—</td>
+                                <td></td>
                                 <td></td>
                                 <td></td>
                                 <td></td>
