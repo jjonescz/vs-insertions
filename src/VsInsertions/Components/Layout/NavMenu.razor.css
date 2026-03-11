@@ -1,18 +1,57 @@
-.navbar-toggler {
-    appearance: none;
-    cursor: pointer;
-    width: 3.5rem;
-    height: 2.5rem;
-    color: white;
-    position: absolute;
-    top: 0.5rem;
-    right: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.55%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem rgba(255, 255, 255, 0.1);
+
+.nav-toggle {
+    display: none;
 }
 
-.navbar-toggler:checked {
-    background-color: rgba(255, 255, 255, 0.5);
+.nav-sidebar {
+    width: 250px;
+    transition: width 0.15s ease-in-out;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar {
+    width: 4rem;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .nav-text {
+    display: none;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .container-fluid {
+    justify-content: center !important;
+    padding: 0 !important;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .navbar-toggler {
+    margin: 0 !important;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .navbar-brand {
+    display: none !important;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .top-row {
+    padding: 0 !important;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .nav-item {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .nav-item a {
+    justify-content: center;
+}
+
+::deep .nav-toggle:checked ~ .nav-sidebar .bi {
+    margin-right: 0;
+}
+
+.navbar-toggler {
+    cursor: pointer;
+    background: none;
+    border: none;
 }
 
 .top-row {
@@ -83,24 +122,7 @@
 }
 
 .nav-scrollable {
-    display: none;
-}
-
-.navbar-toggler:checked ~ .nav-scrollable {
-    display: block;
-}
-
-@media (min-width: 641px) {
-    .navbar-toggler {
-        display: none;
-    }
-
-    .nav-scrollable {
-        /* Never collapse the sidebar for wide screens */
-        display: block;
-
-        /* Allow sidebar to scroll for tall menus */
-        height: calc(100vh - 3.5rem);
-        overflow-y: auto;
-    }
+    /* Allow sidebar to scroll for tall menus */
+    max-height: calc(100vh - 3.5rem);
+    overflow-y: auto;
 }
