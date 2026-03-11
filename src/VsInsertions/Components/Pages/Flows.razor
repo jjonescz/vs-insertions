@@ -38,7 +38,7 @@
         }
         else
         {
-            <span class="badge bg-success me-2">GitHub: signed in</span>
+            <span class="badge bg-success me-2">GitHub: @(gitHubUser ?? "signed in")</span>
             <a href="/signout-github" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
         }
     </div>
@@ -334,6 +334,7 @@
     private bool browser;
     private string? adoAccessToken;
     private string? gitHubToken;
+    private string? gitHubUser;
     private HttpClient adoClient = new();
     private HttpClient gitHubClient = new();
 
@@ -374,6 +375,7 @@
             if (httpContext?.User?.Identity?.IsAuthenticated == true)
             {
                 gitHubToken = await httpContext.GetTokenAsync("access_token");
+                gitHubUser = httpContext.User.Identity.Name;
             }
 
             if (!string.IsNullOrEmpty(gitHubToken))
