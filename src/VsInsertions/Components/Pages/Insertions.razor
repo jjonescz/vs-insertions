@@ -1,5 +1,4 @@
 ﻿@page "/"
-@using Microsoft.AspNetCore.DataProtection
 @using System.Text.Json.Nodes
 @using System.Text.Json
 @using System.Runtime.InteropServices
@@ -10,7 +9,6 @@
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
 @inject IHttpContextAccessor ContextAccessor
-@inject IDataProtectionProvider DataProtectionProvider
 @inject TitleParser TitleParser
 @inject RpsParser RpsParser
 
@@ -18,76 +16,37 @@
 
 <h1>Insertions</h1>
 
-@if (!browser)
-{
-    <em>Checking access token...</em>
-}
-else
-{
-    <div class="my-2">
-        @if (string.IsNullOrEmpty(accessToken))
-        {
-            <div class="row g-3 align-items-center">
-                <div class="col-auto">
-                    <input type="password" class="form-control" placeholder="PAT" @bind="accessTokenInput" />
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary" @onclick="LogInAsync">Log In</button>
-                </div>
-            </div>
+<div class="my-2">
+    <AdoLogin Organization="devdiv" CookieName="access_token"
+              AccessToken="@accessToken" AccessTokenChanged="HandleTokenChanged" />
 
-            <details class="my-2">
-                <summary>How do I get the PAT?</summary>
+    @if (!string.IsNullOrEmpty(accessToken))
+    {
+        <select class="form-select d-inline-block w-auto me-1" @bind="statusFilter">
+            <option value="@StatusFilter.All">All</option>
+            <option value="@StatusFilter.Active">Only active</option>
+        </select>
 
-                <p>
-                    The simplest way is to use the
-                    <a href="https://dev.azure.com/dnceng/public/_artifacts/feed/dotnet-eng/NuGet/Microsoft.DncEng.PatGeneratorTool" target="_blank">PatGeneratorTool</a>:
-                </p>
-                <ol>
-                    <li>
-                        <CopyableCode Code="dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease" />
-                    </li>
-                    <li>
-                        <CopyableCode Code="pat-generator --scopes code_write --organizations devdiv --expires-in 7" />
-                    </li>
-                </ol>
+        <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
 
-                <p>
-                    Alternatively, you can go to <a href="https://dev.azure.com/devdiv/_usersSettings/tokens" target="_blank">Azure DevOps &gt; PATs</a>,
-                    and create a token with <code>Code (Read & write)</code> permission.
-                </p>
-            </details>
-        }
-        else
-        {
-            <button type="submit" class="btn btn-outline-primary me-2" @onclick="LogOutAsync">Log Out</button>
-
-            <select class="form-select d-inline-block w-auto me-1" @bind="statusFilter">
-                <option value="@StatusFilter.All">All</option>
-                <option value="@StatusFilter.Active">Only active</option>
-            </select>
-
-            <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
-
-            <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
-                    title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
-                @if (!editMode)
-                {
-                    @:Edit mode
-                }
-                else
-                {
-                    @:Readonly mode
-                }
-            </button>
-
-            @if (loading)
+        <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
+                title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
+            @if (!editMode)
             {
-                @: Loading...
+                @:Edit mode
             }
+            else
+            {
+                @:Readonly mode
+            }
+        </button>
+
+        @if (loading)
+        {
+            @: Loading...
         }
-    </div>
-}
+    }
+</div>
 
 @if (!started || errorHtml != null)
 {
@@ -281,10 +240,8 @@ else
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
     private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&api-version=6.0";
 
-    private string? accessTokenInput;
     private string? accessToken;
     private HttpClient client = new HttpClient();
-    private bool browser;
     private bool started;
     private bool loading;
     private bool editMode;
@@ -299,52 +256,15 @@ else
     private readonly Dictionary<string, RpsSummary> rpsSummaries = new();
     private string? errorHtml;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private async Task HandleTokenChanged(string? token)
     {
-        if (firstRender)
+        accessToken = token;
+        if (token != null)
         {
-            var encryptedAccessToken = await JSRuntime.InvokeAsync<string>("getAccessTokenCookie");
-
-            try
-            {
-                accessToken = string.IsNullOrEmpty(encryptedAccessToken) ? null :
-                    DataProtectionProvider.CreateProtector("access_token").Unprotect(encryptedAccessToken);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                accessToken = null;
-            }
-
-            browser = true;
-            StateHasChanged();
-
+            errorHtml = null;
+            started = false;
             await StartAsync();
-            StateHasChanged();
         }
-    }
-
-    private async Task LogInAsync()
-    {
-        if (string.IsNullOrEmpty(accessTokenInput))
-        {
-            return;
-        }
-
-        var encryptedAccessToken = DataProtectionProvider.CreateProtector("access_token").Protect(accessTokenInput);
-        await JSRuntime.InvokeVoidAsync("setAccessTokenCookie", encryptedAccessToken);
-        accessToken = accessTokenInput;
-        accessTokenInput = null;
-        errorHtml = null;
-        started = false;
-
-        await StartAsync();
-    }
-
-    private async Task LogOutAsync()
-    {
-        await JSRuntime.InvokeVoidAsync("setAccessTokenCookie", "");
-        accessToken = null;
     }
 
     private async Task StartAsync()

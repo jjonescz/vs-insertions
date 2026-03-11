@@ -1,13 +1,11 @@
 @page "/flows"
 @using Microsoft.AspNetCore.Authentication
-@using Microsoft.AspNetCore.DataProtection
 @using System.Text.Json.Nodes
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
 @inject IHttpContextAccessor ContextAccessor
-@inject IDataProtectionProvider DataProtectionProvider
 @inject MaestroConfigService MaestroConfigService
 @inject GitHubFlowService GitHubFlowService
 @inject ILogger<Flows> Logger
@@ -19,51 +17,15 @@
 <h1>Arcade Flows</h1>
 
 @* === Azure DevOps PAT section (for maestro-configuration) === *@
-@if (!browser)
-{
-    <em>Checking access token...</em>
-}
-else
-{
-    <div class="my-2">
-        @if (string.IsNullOrEmpty(adoAccessToken))
-        {
-            <div class="row g-3 align-items-center">
-                <div class="col-auto">
-                    <input type="password" class="form-control" placeholder="Azure DevOps PAT (dnceng scope)" @bind="adoAccessTokenInput" />
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary" @onclick="AdoLogInAsync">Log In (ADO)</button>
-                </div>
-            </div>
+<div class="my-2">
+    <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
+              AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
+              LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
+</div>
 
-            <details class="my-2">
-                <summary>How do I get the PAT?</summary>
-                <p>
-                    Use the
-                    <a href="https://dev.azure.com/dnceng/public/_artifacts/feed/dotnet-eng/NuGet/Microsoft.DncEng.PatGeneratorTool" target="_blank">PatGeneratorTool</a>:
-                </p>
-                <ol>
-                    <li>
-                        <CopyableCode Code="dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease" />
-                    </li>
-                    <li>
-                        <CopyableCode Code="pat-generator --scopes code_write --organizations dnceng --expires-in 7" />
-                    </li>
-                </ol>
-                <p>
-                    Alternatively, go to <a href="https://dev.azure.com/dnceng/_usersSettings/tokens" target="_blank">Azure DevOps &gt; PATs</a>
-                    and create a token with <code>Code (Read &amp; write)</code> permission for <code>dnceng</code> organization.
-                </p>
-            </details>
-        }
-        else
-        {
-            <button type="submit" class="btn btn-outline-primary me-2" @onclick="AdoLogOutAsync">Log Out (ADO)</button>
-        }
-    </div>
-
-    @* === GitHub OAuth section === *@
+@* === GitHub OAuth section === *@
+@if (browser)
+{
     <div class="my-2">
         @if (string.IsNullOrEmpty(gitHubToken))
         {
@@ -367,7 +329,6 @@ else
 @code {
     // === State ===
     private bool browser;
-    private string? adoAccessTokenInput;
     private string? adoAccessToken;
     private string? gitHubToken;
     private HttpClient adoClient = new();
@@ -405,29 +366,11 @@ else
     {
         if (firstRender)
         {
-            // Read Azure DevOps PAT from cookie.
-            var encryptedAdoToken = await JSRuntime.InvokeAsync<string>("getFlowsAdoTokenCookie");
-            try
-            {
-                adoAccessToken = string.IsNullOrEmpty(encryptedAdoToken) ? null :
-                    DataProtectionProvider.CreateProtector("flows_ado_token").Unprotect(encryptedAdoToken);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Failed to unprotect ADO token");
-                adoAccessToken = null;
-            }
-
             // Read GitHub token from OAuth cookie.
             var httpContext = ContextAccessor.HttpContext;
             if (httpContext?.User?.Identity?.IsAuthenticated == true)
             {
                 gitHubToken = await httpContext.GetTokenAsync("access_token");
-            }
-
-            if (!string.IsNullOrEmpty(adoAccessToken))
-            {
-                SetupAdoClient();
             }
 
             if (!string.IsNullOrEmpty(gitHubToken))
@@ -441,27 +384,20 @@ else
     }
 
     // === ADO Auth ===
-    private async Task AdoLogInAsync()
+    private void HandleAdoTokenChanged(string? token)
     {
-        if (string.IsNullOrEmpty(adoAccessTokenInput))
-            return;
-
-        var encrypted = DataProtectionProvider.CreateProtector("flows_ado_token").Protect(adoAccessTokenInput);
-        await JSRuntime.InvokeVoidAsync("setFlowsAdoTokenCookie", encrypted);
-        adoAccessToken = adoAccessTokenInput;
-        adoAccessTokenInput = null;
-        subscriptionError = null;
-        config = null;
-
-        SetupAdoClient();
-    }
-
-    private async Task AdoLogOutAsync()
-    {
-        await JSRuntime.InvokeVoidAsync("setFlowsAdoTokenCookie", "");
-        adoAccessToken = null;
-        config = null;
-        flowPrs = null;
+        adoAccessToken = token;
+        if (token != null)
+        {
+            subscriptionError = null;
+            config = null;
+            SetupAdoClient();
+        }
+        else
+        {
+            config = null;
+            flowPrs = null;
+        }
     }
 
     private void SetupAdoClient()

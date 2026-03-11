@@ -1,0 +1,94 @@
+@using Microsoft.AspNetCore.DataProtection
+@inject IJSRuntime JSRuntime
+@inject IDataProtectionProvider DataProtectionProvider
+
+@if (!browserReady)
+{
+    <em>Checking access token...</em>
+}
+else if (string.IsNullOrEmpty(AccessToken))
+{
+    <div class="row g-3 align-items-center">
+        <div class="col-auto">
+            <input type="password" class="form-control" placeholder="Azure DevOps PAT (@Organization scope)" @bind="accessTokenInput" />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary" @onclick="LogInAsync">@LoginLabel</button>
+        </div>
+    </div>
+
+    <details class="my-2">
+        <summary>How do I get the PAT?</summary>
+        <p>
+            Use the
+            <a href="https://dev.azure.com/dnceng/public/_artifacts/feed/dotnet-eng/NuGet/Microsoft.DncEng.PatGeneratorTool" target="_blank">PatGeneratorTool</a>:
+        </p>
+        <ol>
+            <li>
+                <CopyableCode Code="dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease" />
+            </li>
+            <li>
+                <CopyableCode Code="@($"pat-generator --scopes code_write --organizations {Organization} --expires-in 7")" />
+            </li>
+        </ol>
+        <p>
+            Alternatively, go to <a href="@($"https://dev.azure.com/{Organization}/_usersSettings/tokens")" target="_blank">Azure DevOps &gt; PATs</a>
+            and create a token with <code>Code (Read &amp; write)</code> permission for the <code>@Organization</code> organization.
+        </p>
+    </details>
+}
+else
+{
+    <button type="submit" class="btn btn-outline-primary me-2" @onclick="LogOutAsync">@LogoutLabel</button>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Organization { get; set; } = "";
+    [Parameter, EditorRequired] public string CookieName { get; set; } = "";
+    [Parameter] public string? AccessToken { get; set; }
+    [Parameter] public EventCallback<string?> AccessTokenChanged { get; set; }
+    [Parameter] public string LoginLabel { get; set; } = "Log In";
+    [Parameter] public string LogoutLabel { get; set; } = "Log Out";
+
+    private string? accessTokenInput;
+    private bool browserReady;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var encrypted = await JSRuntime.InvokeAsync<string>("getCookie", CookieName);
+            try
+            {
+                var token = string.IsNullOrEmpty(encrypted) ? null :
+                    DataProtectionProvider.CreateProtector(CookieName).Unprotect(encrypted);
+                await AccessTokenChanged.InvokeAsync(token);
+            }
+            catch
+            {
+                await AccessTokenChanged.InvokeAsync(null);
+            }
+
+            browserReady = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LogInAsync()
+    {
+        if (string.IsNullOrEmpty(accessTokenInput))
+            return;
+
+        var token = accessTokenInput;
+        var encrypted = DataProtectionProvider.CreateProtector(CookieName).Protect(token);
+        await JSRuntime.InvokeVoidAsync("setCookie", CookieName, encrypted);
+        accessTokenInput = null;
+        await AccessTokenChanged.InvokeAsync(token);
+    }
+
+    private async Task LogOutAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("setCookie", CookieName, "");
+        await AccessTokenChanged.InvokeAsync(null);
+    }
+}

@@ -13,11 +13,3 @@ function getCookie(name) {
 function setCookie(name, value) {
     document.cookie = name + "=" + value + ";secure;samesite=strict";
 }
-
-// Insertions page
-function getAccessTokenCookie() { return getCookie("access_token"); }
-function setAccessTokenCookie(value) { setCookie("access_token", value); }
-
-// Flows page
-function getFlowsAdoTokenCookie() { return getCookie("flows_ado_token"); }
-function setFlowsAdoTokenCookie(value) { setCookie("flows_ado_token", value); }
