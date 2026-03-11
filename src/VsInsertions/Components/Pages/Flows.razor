@@ -72,42 +72,6 @@
         <span class="text-muted">@filteredSubscriptions.Count subscription(s)</span>
     </div>
 
-    @if (filteredSubscriptions.Count > 0)
-    {
-        <h4>Subscriptions</h4>
-        <table class="table table-hover w-auto align-middle">
-            <thead>
-                <tr>
-                    <th>Source Repo</th>
-                    <th>Source Branch</th>
-                    <th>Channel</th>
-                    <th>Target Repo</th>
-                    <th>Target Branch</th>
-                    <th>Frequency</th>
-                    <th>Enabled</th>
-                    <th>Batchable</th>
-                    <th title="Merge Policies">Policies</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var sub in filteredSubscriptions)
-                {
-                    <tr>
-                        <td>@sub.SourceRepoShort</td>
-                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
-                        <td><span class="badge bg-info text-dark">@(sub.Channel ?? "—")</span></td>
-                        <td>@sub.TargetRepoShort</td>
-                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
-                        <td>@(sub.UpdateFrequency ?? "—")</td>
-                        <td>@(sub.Enabled ? "✔" : "✘")</td>
-                        <td>@(sub.Batchable ? "✔" : "—")</td>
-                        <td>@sub.MergePolicySummary</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
     @* === Flow PRs section === *@
     @if (!string.IsNullOrEmpty(gitHubToken) && !string.IsNullOrEmpty(currentRepo) && currentRepo.StartsWith("dotnet/"))
     {
@@ -314,6 +278,43 @@
                 }
             }
         </div>
+    }
+
+    @* === Subscriptions display === *@
+    @if (filteredSubscriptions.Count > 0)
+    {
+        <h4>Subscriptions</h4>
+        <table class="table table-hover w-auto align-middle">
+            <thead>
+                <tr>
+                    <th>Source Repo</th>
+                    <th>Source Branch</th>
+                    <th>Channel</th>
+                    <th>Target Repo</th>
+                    <th>Target Branch</th>
+                    <th>Frequency</th>
+                    <th>Enabled</th>
+                    <th>Batchable</th>
+                    <th title="Merge Policies">Policies</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var sub in filteredSubscriptions)
+                {
+                    <tr>
+                        <td>@sub.SourceRepoShort</td>
+                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
+                        <td><span class="badge bg-info text-dark">@(sub.Channel ?? "—")</span></td>
+                        <td>@sub.TargetRepoShort</td>
+                        <td><code>@(sub.TargetBranch ?? "—")</code></td>
+                        <td>@(sub.UpdateFrequency ?? "—")</td>
+                        <td>@(sub.Enabled ? "✔" : "✘")</td>
+                        <td>@(sub.Batchable ? "✔" : "—")</td>
+                        <td>@sub.MergePolicySummary</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 }
 
