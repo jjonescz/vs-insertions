@@ -95,29 +95,19 @@ else
                             {
                                 @* PR link *@
                                 <td>
+                                    <span title="@PrStateTooltip(primaryPr)">@PrStateEmoji(primaryPr)</span>
                                     <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
                                     @if (row.Prs.Count > 1)
                                     {
                                         <span class="badge bg-secondary ms-1" style="cursor: pointer;"
-                                              title="Click to show all @row.Prs.Count open PRs"
+                                              title="Click to show all @row.Prs.Count PRs"
                                               @onclick="() => ToggleDetails(primaryPr)">+@(row.Prs.Count - 1)</span>
                                     }
                                 </td>
 
                                 @* CI *@
                                 <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">
-                                    @if (!primaryPr.DetailsLoaded)
-                                    {
-                                        <button class="btn btn-outline-secondary btn-sm"
-                                                @onclick="() => OnLoadDetails.InvokeAsync(primaryPr)"
-                                                @onclick:stopPropagation>
-                                            Load
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span>@primaryPr.CiSummary</span>
-                                    }
+                                    <span>@primaryPr.CiSummary</span>
                                 </td>
 
                                 @* Reviews *@
@@ -183,14 +173,11 @@ else
 
                                 @* Expand toggle *@
                                 <td>
-                                    @if (primaryPr.DetailsLoaded)
-                                    {
-                                        <button class="btn btn-outline-secondary btn-sm"
-                                                @onclick="() => ToggleDetails(primaryPr)"
-                                                title="Click to expand/collapse details">
-                                            @(isExpanded ? "▲" : "▼")
-                                        </button>
-                                    }
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            @onclick="() => ToggleDetails(primaryPr)"
+                                            title="Click to expand/collapse details">
+                                        @(isExpanded ? "▲" : "▼")
+                                    </button>
                                 </td>
                             }
                             else
@@ -337,7 +324,6 @@ else
     [Parameter] public HashSet<int> ExpandedPrs { get; set; } = [];
     [Parameter] public FlowPr? ActionInProgressPr { get; set; }
     [Parameter] public string? ActionType { get; set; }
-    [Parameter] public EventCallback<FlowPr> OnLoadDetails { get; set; }
     [Parameter] public EventCallback<FlowPr> OnApproveAndMerge { get; set; }
     [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
 
@@ -346,6 +332,20 @@ else
         if (!ExpandedPrs.Remove(pr.Number))
             ExpandedPrs.Add(pr.Number);
     }
+
+    private static string PrStateEmoji(FlowPr pr) => pr switch
+    {
+        { Merged: true } => "🟣",
+        { State: "closed" } => "🔴",
+        _ => "🟢",
+    };
+
+    private static string PrStateTooltip(FlowPr pr) => pr switch
+    {
+        { Merged: true } => "Merged",
+        { State: "closed" } => "Closed",
+        _ => "Open",
+    };
 
     private static string ReviewStateToColor(string state) => state switch
     {

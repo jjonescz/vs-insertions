@@ -83,7 +83,6 @@
                       ExpandedPrs="expandedPrs"
                       ActionInProgressPr="actionInProgressPr"
                       ActionType="@actionType"
-                      OnLoadDetails="LoadPrDetailsAsync"
                       OnApproveAndMerge="ApproveAndMergeAsync"
                       OnRetryCi="RetryCiAsync" />
 }
@@ -116,6 +115,8 @@
     // Flow PRs state (preserved across navigations via FlowsState).
     private List<FlowPr>? flowPrs { get => FlowsState.FlowPrs; set => FlowsState.FlowPrs = value; }
     private List<FlowPr>? outgoingFlowPrs { get => FlowsState.OutgoingFlowPrs; set => FlowsState.OutgoingFlowPrs = value; }
+    private List<FlowPr>? closedFlowPrs { get => FlowsState.ClosedFlowPrs; set => FlowsState.ClosedFlowPrs = value; }
+    private List<FlowPr>? closedOutgoingFlowPrs { get => FlowsState.ClosedOutgoingFlowPrs; set => FlowsState.ClosedOutgoingFlowPrs = value; }
     private bool loadingPrs;
     private bool loadingOutgoingPrs;
     private string? prError;
@@ -193,6 +194,8 @@
             config = null;
             flowPrs = null;
             outgoingFlowPrs = null;
+            closedFlowPrs = null;
+            closedOutgoingFlowPrs = null;
         }
     }
 
@@ -229,6 +232,8 @@
             }
             flowPrs = null; // Reset PRs when subscriptions change.
             outgoingFlowPrs = null;
+            closedFlowPrs = null;
+            closedOutgoingFlowPrs = null;
         }
         catch (Exception ex)
         {
@@ -270,12 +275,24 @@
 
         try
         {
-            flowPrs = (await GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]))
+            var openTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
+            var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
+            await Task.WhenAll(openTask, closedTask);
+
+            flowPrs = openTask.Result
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
+            closedFlowPrs = closedTask.Result
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
             // Load details for all PRs.
             foreach (var pr in flowPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+            foreach (var pr in closedFlowPrs)
             {
                 LoadPrDetailsInBackground(pr);
             }
@@ -319,12 +336,25 @@
 
         try
         {
-            outgoingFlowPrs = (await GitHubFlowService.GetOutgoingFlowPrsAsync(
-                gitHubClient, parts[0], parts[1], targetRepos))
+            var openTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
+                gitHubClient, parts[0], parts[1], targetRepos);
+            var closedTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
+                gitHubClient, parts[0], parts[1], targetRepos, state: "closed", perPage: 10);
+            await Task.WhenAll(openTask, closedTask);
+
+            outgoingFlowPrs = openTask.Result
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
+            closedOutgoingFlowPrs = closedTask.Result
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
             foreach (var pr in outgoingFlowPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+            foreach (var pr in closedOutgoingFlowPrs)
             {
                 LoadPrDetailsInBackground(pr);
             }
@@ -485,6 +515,18 @@
             foreach (var pr in matched)
                 matchedIncomingPrNumbers.Add(pr.Number);
 
+            // If no open PRs, fall back to the most recent closed PR.
+            if (matched.Count == 0)
+            {
+                var closedMatch = (closedFlowPrs ?? [])
+                    .Where(pr => pr.Title.Contains(sub.SourceRepoShort, StringComparison.OrdinalIgnoreCase)
+                        && MatchesTargetBranch(pr, sub.TargetBranch))
+                    .OrderByDescending(pr => pr.Number)
+                    .Take(1)
+                    .ToList();
+                matched = closedMatch;
+            }
+
             rows.Add(new UnifiedFlowRow
             {
                 OtherRepo = sub.SourceRepoShort,
@@ -505,6 +547,18 @@
                 .ToList();
             foreach (var pr in matched)
                 matchedOutgoingPrNumbers.Add(pr.Number);
+
+            // If no open PRs, fall back to the most recent closed PR.
+            if (matched.Count == 0)
+            {
+                var closedMatch = (closedOutgoingFlowPrs ?? [])
+                    .Where(pr => string.Equals(pr.Repo, sub.TargetRepoShort, StringComparison.OrdinalIgnoreCase)
+                        && MatchesTargetBranch(pr, sub.TargetBranch))
+                    .OrderByDescending(pr => pr.Number)
+                    .Take(1)
+                    .ToList();
+                matched = closedMatch;
+            }
 
             rows.Add(new UnifiedFlowRow
             {
@@ -566,6 +620,38 @@
             var token = end >= 0 ? rest[..end] : rest;
             if (token.IndexOf('/') >= 0)
                 return token.ToString();
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if a PR matches the expected target branch.
+    /// Uses <see cref="FlowPr.TargetBranch"/> if loaded, otherwise extracts
+    /// the branch from the title (e.g., "[main] Update dependencies...").
+    /// </summary>
+    private static bool MatchesTargetBranch(FlowPr pr, string? expectedBranch)
+    {
+        if (expectedBranch is null)
+            return true;
+
+        var prBranch = pr.TargetBranch ?? ExtractTargetBranchFromTitle(pr.Title);
+        if (prBranch is null)
+            return true;
+
+        return string.Equals(prBranch, expectedBranch, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Extracts the target branch from a maestro PR title like
+    /// "[main] Update dependencies from dotnet/runtime" → "main".
+    /// </summary>
+    private static string? ExtractTargetBranchFromTitle(string title)
+    {
+        if (title.StartsWith('['))
+        {
+            var end = title.IndexOf(']');
+            if (end > 1)
+                return title[1..end];
         }
         return null;
     }
