@@ -42,10 +42,7 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
         logger.LogInformation("Found {SubFiles} subscription files and {DcFiles} default-channel files",
             subscriptionFiles.Count, defaultChannelFiles.Count);
 
-        var subscriptions = new List<ArcadeSubscription>();
-        var defaultChannels = new List<DefaultChannel>();
-
-        foreach (var path in subscriptionFiles)
+        var subscriptionTasks = subscriptionFiles.Select(async path =>
         {
             try
             {
@@ -56,16 +53,17 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
                 {
                     foreach (var sub in list)
                         sub.SourceFile = path;
-                    subscriptions.AddRange(list);
+                    return list;
                 }
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to parse subscription file {Path}", path);
             }
-        }
+            return [];
+        }).ToList();
 
-        foreach (var path in defaultChannelFiles)
+        var defaultChannelTasks = defaultChannelFiles.Select(async path =>
         {
             try
             {
@@ -73,13 +71,17 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
                 var yamlContent = await client.GetStringAsync(fileUrl);
                 var list = _yamlDeserializer.Deserialize<List<DefaultChannel>>(yamlContent);
                 if (list != null)
-                    defaultChannels.AddRange(list);
+                    return list;
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to parse default-channel file {Path}", path);
             }
-        }
+            return [];
+        }).ToList();
+
+        var subscriptions = (await Task.WhenAll(subscriptionTasks)).SelectMany(x => x).ToList();
+        var defaultChannels = (await Task.WhenAll(defaultChannelTasks)).SelectMany(x => x).ToList();
 
         logger.LogInformation("Loaded {SubCount} subscriptions and {ChannelCount} default channels",
             subscriptions.Count, defaultChannels.Count);
