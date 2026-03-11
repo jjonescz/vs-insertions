@@ -10,5 +10,6 @@ public sealed class FlowsState
     public List<string> Repos { get; set; } = [];
     public string? CurrentRepo { get; set; }
     public List<FlowPr>? FlowPrs { get; set; }
+    public List<FlowPr>? OutgoingFlowPrs { get; set; }
     public HashSet<int> ExpandedPrs { get; set; } = [];
 }

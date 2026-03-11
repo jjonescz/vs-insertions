@@ -79,9 +79,9 @@
     {
         <div class="my-3">
             <h4>
-                Flow PRs
-                <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="LoadFlowPrsAsync" disabled="@loadingPrs">
-                    @(loadingPrs ? "Loading..." : "Load / Refresh")
+                Incoming Flow PRs
+                <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
+                    @(loadingPrs || loadingOutgoingPrs ? "Loading..." : "Load / Refresh")
                 </button>
             </h4>
 
@@ -280,6 +280,212 @@
                 }
             }
         </div>
+
+        @* === Outgoing Flow PRs section === *@
+        <div class="my-3">
+            <h4>Outgoing Flow PRs</h4>
+
+            @if (outgoingPrError != null)
+            {
+                <div class="alert alert-danger mt-2">@outgoingPrError</div>
+            }
+
+            @if (loadingOutgoingPrs)
+            {
+                <p class="text-muted">Loading...</p>
+            }
+            else if (outgoingFlowPrs != null)
+            {
+                @if (outgoingFlowPrs.Count == 0)
+                {
+                    <p class="text-muted">No open outgoing flow PRs found.</p>
+                }
+                else
+                {
+                    <table class="table table-hover w-auto align-middle">
+                        <thead>
+                            <tr>
+                                <th>PR #</th>
+                                <th title="State">S</th>
+                                <th>Target Repo</th>
+                                <th>Title</th>
+                                <th>Target</th>
+                                <th>CI</th>
+                                <th title="Reviews">👀</th>
+                                <th title="Non-bot comments">💬</th>
+                                <th>Actions</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pr in outgoingFlowPrs)
+                            {
+                                <tr>
+                                    <td><a href="@pr.Url" target="_blank">#@pr.Number</a></td>
+                                    <td title="@pr.State">@PrStateToEmoji(pr)</td>
+                                    <td><code>@pr.Repo</code></td>
+                                    <td title="@pr.Title" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        @TruncateTitle(pr.Title)
+                                    </td>
+                                    <td><code>@(pr.TargetBranch ?? "—")</code></td>
+
+                                    @* CI status *@
+                                    <td title="Click to expand CI details" style="cursor: pointer;" @onclick="() => ToggleDetails(pr)">
+                                        @if (!pr.DetailsLoaded)
+                                        {
+                                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => LoadPrDetailsAsync(pr)">
+                                                Load
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span>@pr.CiSummary</span>
+                                        }
+                                    </td>
+
+                                    @* Reviews *@
+                                    <td style="cursor: pointer;" @onclick="() => ToggleDetails(pr)">
+                                        @if (pr.Reviews != null)
+                                        {
+                                            @foreach (var review in pr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
+                                            {
+                                                @if (review.AvatarUrl != null)
+                                                {
+                                                    <img src="@review.AvatarUrl" title="@review.Author: @review.State"
+                                                         style="width: 1.2em; height: 1.2em; border-radius: 50%; border: 0.15em solid @ReviewStateToColor(review.State); margin-right: 2px;" />
+                                                }
+                                                else
+                                                {
+                                                    <span title="@review.Author: @review.State" style="color: @ReviewStateToColor(review.State);">
+                                                        @review.Author[..1]
+                                                    </span>
+                                                }
+                                            }
+                                        }
+                                    </td>
+
+                                    @* Comments *@
+                                    <td style="cursor: pointer;" @onclick="() => ToggleDetails(pr)">@(pr.Comments?.Count ?? 0)</td>
+
+                                    @* Action buttons *@
+                                    <td>
+                                        @if (pr.State == "open" && !pr.Merged)
+                                        {
+                                            <button class="btn btn-success btn-sm me-1"
+                                                    @onclick="() => ApproveAndMergeAsync(pr)"
+                                                    disabled="@(pr == actionInProgressPr)"
+                                                    title="Approve, squash-merge, and delete branch">
+                                                @if (pr == actionInProgressPr && actionType == "merge")
+                                                {
+                                                    @:Merging...
+                                                }
+                                                else
+                                                {
+                                                    @:Approve & Merge
+                                                }
+                                            </button>
+
+                                            @if (pr.DetailsLoaded && pr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
+                                            {
+                                                <button class="btn btn-warning btn-sm"
+                                                        @onclick="() => RetryCiAsync(pr)"
+                                                        disabled="@(pr == actionInProgressPr)"
+                                                        title="Re-run failed CI checks">
+                                                    @if (pr == actionInProgressPr && actionType == "retry")
+                                                    {
+                                                        @:Retrying...
+                                                    }
+                                                    else
+                                                    {
+                                                        @:Retry CI
+                                                    }
+                                                </button>
+                                            }
+                                        }
+                                    </td>
+
+                                    @* Expand details *@
+                                    <td>
+                                        @if (pr.DetailsLoaded)
+                                        {
+                                            <button class="btn btn-outline-secondary btn-sm"
+                                                    @onclick="() => ToggleDetails(pr)"
+                                                    title="Show/hide details">
+                                                @(expandedPrs.Contains(pr.Number) ? "▲" : "▼")
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+
+                                @* Expanded details row *@
+                                @if (expandedPrs.Contains(pr.Number))
+                                {
+                                    <tr>
+                                        <td colspan="10">
+                                            <div class="p-2" style="background-color: #f8f9fa;">
+                                                @if (pr.CheckRuns is { Count: > 0 })
+                                                {
+                                                    <strong>CI Checks:</strong>
+                                                    <ul class="mb-2">
+                                                        @foreach (var check in pr.CheckRuns)
+                                                        {
+                                                            <li>
+                                                                @CheckConclusionToEmoji(check.Conclusion, check.Status)
+                                                                @if (check.Url != null)
+                                                                {
+                                                                    <a href="@check.Url" target="_blank">@check.Name</a>
+                                                                }
+                                                                else
+                                                                {
+                                                                    @check.Name
+                                                                }
+                                                                <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+
+                                                @if (pr.Comments is { Count: > 0 })
+                                                {
+                                                    <strong>Comments (non-bot):</strong>
+                                                    <ul class="mb-2">
+                                                        @foreach (var comment in pr.Comments)
+                                                        {
+                                                            <li>
+                                                                <strong>@comment.Author</strong>
+                                                                <small class="text-muted">@comment.CreatedAt.ToString("g")</small>:
+                                                                @comment.Body
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+
+                                                @if (pr.Reviews is { Count: > 0 })
+                                                {
+                                                    <strong>Reviews:</strong>
+                                                    <ul class="mb-0">
+                                                        @foreach (var review in pr.Reviews)
+                                                        {
+                                                            <li>
+                                                                <strong>@review.Author</strong>: @review.State
+                                                                @if (review.SubmittedAt.HasValue)
+                                                                {
+                                                                    <small class="text-muted">@review.SubmittedAt.Value.ToString("g")</small>
+                                                                }
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        </div>
     }
 
     @* === Incoming subscriptions === *@
@@ -372,8 +578,11 @@
 
     // Flow PRs state (preserved across navigations via FlowsState).
     private List<FlowPr>? flowPrs { get => FlowsState.FlowPrs; set => FlowsState.FlowPrs = value; }
+    private List<FlowPr>? outgoingFlowPrs { get => FlowsState.OutgoingFlowPrs; set => FlowsState.OutgoingFlowPrs = value; }
     private bool loadingPrs;
+    private bool loadingOutgoingPrs;
     private string? prError;
+    private string? outgoingPrError;
     private HashSet<int> expandedPrs => FlowsState.ExpandedPrs;
 
     // Action state.
@@ -446,6 +655,7 @@
             FlowsState.AdoAccessToken = null;
             config = null;
             flowPrs = null;
+            outgoingFlowPrs = null;
         }
     }
 
@@ -481,6 +691,7 @@
                     ?? repos[0];
             }
             flowPrs = null; // Reset PRs when subscriptions change.
+            outgoingFlowPrs = null;
         }
         catch (Exception ex)
         {
@@ -497,10 +708,17 @@
         if (flowPrs == null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
             await LoadFlowPrsAsync();
+            _ = LoadOutgoingFlowPrsAsync();
         }
     }
 
     // === Load Flow PRs ===
+    private async Task LoadAllFlowPrsAsync()
+    {
+        await LoadFlowPrsAsync();
+        _ = LoadOutgoingFlowPrsAsync();
+    }
+
     private async Task LoadFlowPrsAsync()
     {
         if (string.IsNullOrEmpty(currentRepo))
@@ -536,12 +754,55 @@
         }
     }
 
-    private async Task LoadPrDetailsAsync(FlowPr pr)
+    // === Load Outgoing Flow PRs ===
+    private async Task LoadOutgoingFlowPrsAsync()
     {
-        if (string.IsNullOrEmpty(currentRepo))
+        if (string.IsNullOrEmpty(currentRepo) || config is null)
             return;
 
         var parts = currentRepo.Split('/');
+        if (parts.Length != 2)
+            return;
+
+        var targetRepos = outgoingSubscriptions
+            .Select(s => s.TargetRepoShort)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (targetRepos.Count == 0)
+        {
+            outgoingFlowPrs = [];
+            return;
+        }
+
+        loadingOutgoingPrs = true;
+        outgoingPrError = null;
+        StateHasChanged();
+
+        try
+        {
+            outgoingFlowPrs = await GitHubFlowService.GetOutgoingFlowPrsAsync(
+                gitHubClient, parts[0], parts[1], targetRepos);
+            foreach (var pr in outgoingFlowPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load outgoing flow PRs");
+            outgoingPrError = $"Failed to load outgoing flow PRs: {ex.Message}";
+        }
+        finally
+        {
+            loadingOutgoingPrs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPrDetailsAsync(FlowPr pr)
+    {
+        var parts = pr.Repo.Split('/');
         if (parts.Length != 2)
             return;
 
@@ -565,10 +826,7 @@
     // === Actions ===
     private async Task ApproveAndMergeAsync(FlowPr pr)
     {
-        if (string.IsNullOrEmpty(currentRepo))
-            return;
-
-        var parts = currentRepo.Split('/');
+        var parts = pr.Repo.Split('/');
         if (parts.Length != 2)
             return;
 
@@ -599,10 +857,7 @@
 
     private async Task RetryCiAsync(FlowPr pr)
     {
-        if (string.IsNullOrEmpty(currentRepo))
-            return;
-
-        var parts = currentRepo.Split('/');
+        var parts = pr.Repo.Split('/');
         if (parts.Length != 2)
             return;
 

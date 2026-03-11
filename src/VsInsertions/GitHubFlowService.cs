@@ -44,6 +44,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             prs.Add(new FlowPr
             {
                 Number = number,
+                Repo = $"{owner}/{repo}",
                 Title = item["title"]?.ToString() ?? "",
                 State = item["state"]?.ToString() ?? "",
                 Url = item["html_url"]?.ToString() ?? $"https://github.com/{owner}/{repo}/pull/{number}",
@@ -53,6 +54,86 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         }
 
         return prs;
+    }
+
+    /// <summary>
+    /// Searches for outgoing flow PRs — PRs created by dotnet-maestro in other repos
+    /// that originate from the given source repo.
+    /// </summary>
+    public async Task<List<FlowPr>> GetOutgoingFlowPrsAsync(
+        HttpClient client,
+        string sourceOwner,
+        string sourceRepo,
+        IEnumerable<string> targetRepos,
+        string state = "open",
+        int perPage = 30)
+    {
+        // Build repo filter for target repos (only GitHub dotnet/ repos).
+        var repoFilters = targetRepos
+            .Where(r => r.StartsWith("dotnet/", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(r => $"repo:{r}")
+            .ToList();
+
+        if (repoFilters.Count == 0)
+            return [];
+
+        var allPrs = new List<FlowPr>();
+
+        // GitHub search API has a limit on query length, so batch if needed.
+        // Search for PRs with the source repo name in the title.
+        foreach (var batch in repoFilters.Chunk(5))
+        {
+            var repoQuery = string.Join('+', batch);
+            var url = $"{GitHubApiBase}/search/issues?q={repoQuery}+is:pr+author:app/dotnet-maestro+state:{state}+in:title+{Uri.EscapeDataString($"{sourceOwner}/{sourceRepo}")}&per_page={perPage}&sort=created&order=desc";
+
+            try
+            {
+                var json = await client.GetStringAsync(url);
+                var searchResult = JsonNode.Parse(json);
+                var items = searchResult?["items"]?.AsArray();
+                if (items is null)
+                    continue;
+
+                foreach (var item in items)
+                {
+                    var number = (int)item!["number"]!;
+                    var htmlUrl = item["html_url"]?.ToString() ?? "";
+                    // Extract repo from the URL: https://github.com/{owner}/{repo}/issues/{number}
+                    var repo = ExtractRepoFromUrl(htmlUrl);
+
+                    allPrs.Add(new FlowPr
+                    {
+                        Number = number,
+                        Repo = repo ?? "",
+                        Title = item["title"]?.ToString() ?? "",
+                        State = item["state"]?.ToString() ?? "",
+                        Url = htmlUrl,
+                        CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
+                        UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to search outgoing flow PRs in repos: {Repos}", string.Join(", ", batch));
+            }
+        }
+
+        return allPrs;
+    }
+
+    private static string? ExtractRepoFromUrl(string htmlUrl)
+    {
+        // https://github.com/{owner}/{repo}/...
+        if (htmlUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = htmlUrl["https://github.com/".Length..];
+            var parts = path.Split('/');
+            if (parts.Length >= 2)
+                return $"{parts[0]}/{parts[1]}";
+        }
+        return null;
     }
 
     /// <summary>
@@ -277,6 +358,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 public sealed class FlowPr
 {
     public int Number { get; set; }
+    public string Repo { get; set; } = "";
     public string Title { get; set; } = "";
     public string State { get; set; } = "";
     public string Url { get; set; } = "";
