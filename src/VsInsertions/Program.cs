@@ -17,6 +17,7 @@ builder.Services.AddSingleton<TitleParser>();
 builder.Services.AddSingleton<RpsParser>();
 builder.Services.AddSingleton<MaestroConfigService>();
 builder.Services.AddSingleton<GitHubFlowService>();
+builder.Services.AddScoped<FlowsState>();
 
 // GitHub OAuth (only when credentials are configured).
 var gitHubClientId = builder.Configuration["GitHub:ClientId"];

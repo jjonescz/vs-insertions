@@ -12,6 +12,7 @@
 @inject GitHubFlowService GitHubFlowService
 @inject ILogger<Flows> Logger
 @inject ILoggerFactory LoggerFactory
+@inject FlowsState FlowsState
 
 <PageTitle>Flows</PageTitle>
 
@@ -389,18 +390,18 @@ else
     private HttpClient adoClient = new();
     private HttpClient gitHubClient = new();
 
-    // Subscriptions state.
-    private MaestroConfig? config;
-    private List<string> repos = [];
-    private string? currentRepo;
+    // Subscriptions state (preserved across navigations via FlowsState).
+    private MaestroConfig? config { get => FlowsState.Config; set => FlowsState.Config = value; }
+    private List<string> repos { get => FlowsState.Repos; set => FlowsState.Repos = value; }
+    private string? currentRepo { get => FlowsState.CurrentRepo; set => FlowsState.CurrentRepo = value; }
     private bool loadingSubscriptions;
     private string? subscriptionError;
 
-    // Flow PRs state.
-    private List<FlowPr>? flowPrs;
+    // Flow PRs state (preserved across navigations via FlowsState).
+    private List<FlowPr>? flowPrs { get => FlowsState.FlowPrs; set => FlowsState.FlowPrs = value; }
     private bool loadingPrs;
     private string? prError;
-    private HashSet<int> expandedPrs = [];
+    private HashSet<int> expandedPrs => FlowsState.ExpandedPrs;
 
     // Action state.
     private FlowPr? actionInProgressPr;
