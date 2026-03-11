@@ -709,16 +709,14 @@
         // Auto-load flow PRs if GitHub is signed in and a dotnet/ repo is selected.
         if (flowPrs == null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
-            await LoadFlowPrsAsync();
-            _ = LoadOutgoingFlowPrsAsync();
+            await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
         }
     }
 
     // === Load Flow PRs ===
     private async Task LoadAllFlowPrsAsync()
     {
-        await LoadFlowPrsAsync();
-        _ = LoadOutgoingFlowPrsAsync();
+        await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
     }
 
     private async Task LoadFlowPrsAsync()
