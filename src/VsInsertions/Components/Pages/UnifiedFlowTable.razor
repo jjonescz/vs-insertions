@@ -64,7 +64,7 @@ else
                     </td>
                 </tr>
 
-                @foreach (var row in group)
+                @foreach (var row in group.OrderBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
                     var isExpanded = primaryPr != null && ExpandedPrs.Contains(primaryPr.Number);
