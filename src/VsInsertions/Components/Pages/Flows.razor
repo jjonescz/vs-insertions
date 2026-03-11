@@ -208,6 +208,12 @@
                                         <td colspan="7">
                                             <div class="p-2" style="background-color: #f8f9fa;">
                                                 <strong>Title:</strong> @pr.Title<br/>
+                                                <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
+                                                @if (pr.UpdatedAt.HasValue)
+                                                {
+                                                    <text> · <strong>Updated:</strong> <span>@pr.UpdatedAt.Value.ToString("g")</span></text>
+                                                }
+                                                <br/>
 
                                                 @if (pr.CheckRuns is { Count: > 0 })
                                                 {
@@ -409,7 +415,13 @@
                                     <tr>
                                         <td colspan="8">
                                             <div class="p-2" style="background-color: #f8f9fa;">
-                                                <strong>Title:</strong> @pr.Title
+                                                <strong>Title:</strong> @pr.Title<br/>
+                                                <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
+                                                @if (pr.UpdatedAt.HasValue)
+                                                {
+                                                    <text> · <strong>Updated:</strong> <span>@pr.UpdatedAt.Value.ToString("g")</span></text>
+                                                }
+                                                <br/>
 
                                                 @if (pr.CheckRuns is { Count: > 0 })
                                                 {
