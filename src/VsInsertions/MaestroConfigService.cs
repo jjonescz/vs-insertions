@@ -30,7 +30,7 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
         foreach (var item in tree!["value"]!.AsArray())
         {
             var path = item!["path"]!.ToString();
-            var isFolder = (bool)item["isFolder"]!;
+            var isFolder = item["isFolder"]?.GetValue<bool>() ?? false;
             if (isFolder || !path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
                 continue;
 
