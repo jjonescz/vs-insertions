@@ -21,18 +21,23 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
     {
         // Get the repo tree to find YAML files.
         var treeUrl = $"{BaseUrl}/items?recursionLevel=Full&api-version=6.0&versionDescriptor.version=main";
+        logger.LogInformation("Fetching maestro-configuration tree...");
         var treeJson = await client.GetStringAsync(treeUrl);
         var tree = JsonNode.Parse(treeJson);
+
+        var items = tree!["value"]!.AsArray();
+        var yamlFiles = items
+            .Where(item => !(item!["isFolder"]?.GetValue<bool>() ?? false)
+                        && item["path"]!.ToString().EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        logger.LogInformation("Found {TotalItems} items in tree, {YamlCount} YAML files", items.Count, yamlFiles.Count);
 
         var subscriptions = new List<ArcadeSubscription>();
         var defaultChannels = new List<DefaultChannel>();
 
-        foreach (var item in tree!["value"]!.AsArray())
+        foreach (var item in yamlFiles)
         {
             var path = item!["path"]!.ToString();
-            var isFolder = item["isFolder"]?.GetValue<bool>() ?? false;
-            if (isFolder || !path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
-                continue;
 
             try
             {
@@ -46,6 +51,8 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
             }
         }
 
+        logger.LogInformation("Loaded {SubCount} subscriptions and {ChannelCount} default channels",
+            subscriptions.Count, defaultChannels.Count);
         return new MaestroConfig(subscriptions, defaultChannels);
     }
 

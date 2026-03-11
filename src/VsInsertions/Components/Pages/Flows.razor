@@ -11,6 +11,7 @@
 @inject MaestroConfigService MaestroConfigService
 @inject GitHubFlowService GitHubFlowService
 @inject ILogger<Flows> Logger
+@inject ILoggerFactory LoggerFactory
 
 <PageTitle>Flows</PageTitle>
 
@@ -481,19 +482,15 @@ else
 
     private void SetupAdoClient()
     {
-        adoClient = new HttpClient();
-        adoClient.DefaultRequestHeaders.Remove("Authorization");
+        adoClient = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.ADO")));
         adoClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {adoAccessToken}");
     }
 
     private void SetupGitHubClient()
     {
-        gitHubClient = new HttpClient();
-        gitHubClient.DefaultRequestHeaders.Remove("Authorization");
+        gitHubClient = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")));
         gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {gitHubToken}");
-        gitHubClient.DefaultRequestHeaders.Remove("User-Agent");
         gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
-        gitHubClient.DefaultRequestHeaders.Remove("Accept");
         gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
     }
 
