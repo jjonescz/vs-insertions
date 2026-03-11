@@ -19,7 +19,7 @@ else
         .GroupBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
         .ToList();
-    var totalCols = PrsAvailable ? 11 : 5;
+    var totalCols = PrsAvailable ? 10 : 4;
 
     <table class="table table-hover w-auto align-middle">
         <thead>
@@ -28,7 +28,6 @@ else
                 <th>Channel</th>
                 <th>Source Branch</th>
                 <th>Target Branch</th>
-                <th>Frequency</th>
                 @if (PrsAvailable)
                 {
                     <th>PR</th>
@@ -79,7 +78,7 @@ else
                         </td>
 
                         @* Channel *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">
+                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(row.Subscription?.UpdateFrequency ?? "")">
                             @if (row.Subscription != null)
                             {
                                 <span class="badge bg-info text-dark">@(row.Subscription.Channel ?? "—")</span>
@@ -91,9 +90,6 @@ else
 
                         @* Target Branch *@
                         <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
-
-                        @* Frequency *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">@(row.Subscription?.UpdateFrequency ?? "—")</td>
 
 
                         @if (PrsAvailable)
