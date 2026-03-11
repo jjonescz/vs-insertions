@@ -19,7 +19,7 @@ else
         .GroupBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
         .ToList();
-    var totalCols = PrsAvailable ? 12 : 6;
+    var totalCols = PrsAvailable ? 11 : 5;
 
     <table class="table table-hover w-auto align-middle">
         <thead>
@@ -29,7 +29,6 @@ else
                 <th>Source Branch</th>
                 <th>Target Branch</th>
                 <th>Frequency</th>
-                <th>Enabled</th>
                 @if (PrsAvailable)
                 {
                     <th>PR</th>
@@ -96,8 +95,6 @@ else
                         @* Frequency *@
                         <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">@(row.Subscription?.UpdateFrequency ?? "—")</td>
 
-                        @* Enabled *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")">@(row.Subscription != null ? (row.Subscription.Enabled ? "✔" : "✘") : "")</td>
 
                         @if (PrsAvailable)
                         {
