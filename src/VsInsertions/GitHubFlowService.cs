@@ -19,6 +19,43 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     };
 
     /// <summary>
+    /// Lists localization PRs (created by dotnet-bot via OneLocBuild) for the given repo.
+    /// </summary>
+    public async Task<List<FlowPr>> GetLocPrsAsync(
+        HttpClient client,
+        string owner,
+        string repo,
+        string state = "open",
+        int perPage = 30)
+    {
+        var url = $"{GitHubApiBase}/search/issues?q=repo:{owner}/{repo}+is:pr+author:dotnet-bot+state:{state}+in:title+{Uri.EscapeDataString("Localized file check-in")}&per_page={perPage}&sort=created&order=desc";
+        var json = await client.GetStringAsync(url);
+        var searchResult = JsonNode.Parse(json);
+
+        var prs = new List<FlowPr>();
+        var items = searchResult?["items"]?.AsArray();
+        if (items is null)
+            return prs;
+
+        foreach (var item in items)
+        {
+            var number = (int)item!["number"]!;
+            prs.Add(new FlowPr
+            {
+                Number = number,
+                Repo = $"{owner}/{repo}",
+                Title = item["title"]?.ToString() ?? "",
+                State = item["state"]?.ToString() ?? "",
+                Url = item["html_url"]?.ToString() ?? $"https://github.com/{owner}/{repo}/pull/{number}",
+                CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
+                UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
+            });
+        }
+
+        return prs;
+    }
+
+    /// <summary>
     /// Lists flow PRs (created by dotnet-maestro) for the given repo.
     /// </summary>
     public async Task<List<FlowPr>> GetFlowPrsAsync(

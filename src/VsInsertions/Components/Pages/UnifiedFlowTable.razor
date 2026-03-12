@@ -263,7 +263,7 @@ else
                                             </div>
                                         }
 
-                                        <strong>Title:</strong> @pr.Title<br/>
+                                        <strong>Title:</strong>@(" ")@pr.Title<br/>
                                         <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
                                         @if (pr.UpdatedAt.HasValue)
                                         {

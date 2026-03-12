@@ -212,6 +212,8 @@ else
     private List<FlowPr>? outgoingFlowPrs { get => FlowsState.OutgoingFlowPrs; set => FlowsState.OutgoingFlowPrs = value; }
     private List<FlowPr>? closedFlowPrs { get => FlowsState.ClosedFlowPrs; set => FlowsState.ClosedFlowPrs = value; }
     private List<FlowPr>? closedOutgoingFlowPrs { get => FlowsState.ClosedOutgoingFlowPrs; set => FlowsState.ClosedOutgoingFlowPrs = value; }
+    private List<FlowPr>? locPrs { get => FlowsState.LocPrs; set => FlowsState.LocPrs = value; }
+    private List<FlowPr>? closedLocPrs { get => FlowsState.ClosedLocPrs; set => FlowsState.ClosedLocPrs = value; }
     private bool loadingPrs;
     private bool loadingOutgoingPrs;
     private string? prError;
@@ -297,6 +299,8 @@ else
             outgoingFlowPrs = null;
             closedFlowPrs = null;
             closedOutgoingFlowPrs = null;
+            locPrs = null;
+            closedLocPrs = null;
         }
     }
 
@@ -365,6 +369,8 @@ else
         outgoingFlowPrs = null;
         closedFlowPrs = null;
         closedOutgoingFlowPrs = null;
+        locPrs = null;
+        closedLocPrs = null;
     }
 
     // === Load Subscriptions ===
@@ -388,6 +394,8 @@ else
             outgoingFlowPrs = null;
             closedFlowPrs = null;
             closedOutgoingFlowPrs = null;
+            locPrs = null;
+            closedLocPrs = null;
         }
         catch (Exception ex)
         {
@@ -431,7 +439,9 @@ else
         {
             var openTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
             var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
-            await Task.WhenAll(openTask, closedTask);
+            var openLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1]);
+            var closedLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
+            await Task.WhenAll(openTask, closedTask, openLocTask, closedLocTask);
 
             flowPrs = openTask.Result
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
@@ -441,12 +451,26 @@ else
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
+            locPrs = openLocTask.Result
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            closedLocPrs = closedLocTask.Result
+                .OrderByDescending(p => p.Number)
+                .ToList();
             // Load details for all PRs.
             foreach (var pr in flowPrs)
             {
                 LoadPrDetailsInBackground(pr);
             }
             foreach (var pr in closedFlowPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+            foreach (var pr in locPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+            foreach (var pr in closedLocPrs)
             {
                 LoadPrDetailsInBackground(pr);
             }
@@ -778,6 +802,27 @@ else
                     OtherRepo = ExtractSourceRepoFromTitle(pr.Title) ?? "unknown",
                     IsIncoming = true,
                     Prs = [pr],
+                });
+            }
+        }
+
+        // Loc PRs — group by target branch, one row per branch.
+        {
+            var allLoc = (locPrs ?? []).Concat(closedLocPrs ?? []).ToList();
+            var branchGroups = allLoc
+                .GroupBy(pr => pr.TargetBranch ?? "unknown", StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var group in branchGroups)
+            {
+                var open = group.Where(p => p.State == "open").OrderByDescending(p => p.Number).ToList();
+                var closed = group.Where(p => p.State != "open").OrderByDescending(p => p.Number).ToList();
+                var prs = open.Count > 0 ? open : closed.Take(1).ToList();
+                rows.Add(new UnifiedFlowRow
+                {
+                    OtherRepo = "Localization (OneLocBuild)",
+                    IsIncoming = true,
+                    Prs = prs,
                 });
             }
         }
