@@ -28,7 +28,7 @@ else if (string.IsNullOrEmpty(AccessToken))
                 <CopyableCode Code="dotnet tool install --global Microsoft.DncEng.PatGeneratorTool --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json --prerelease" />
             </li>
             <li>
-                <CopyableCode Code="@($"pat-generator --scopes code_write --organizations devdiv --organizations dnceng --expires-in 7")" />
+                <CopyableCode Code="@($"pat-generator --scopes code_write build_execute --organizations devdiv dnceng dnceng-public --expires-in 7")" />
             </li>
         </ol>
         <p>

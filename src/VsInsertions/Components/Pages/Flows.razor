@@ -666,7 +666,7 @@ else
 
         try
         {
-            var (success, message) = await GitHubFlowService.RetryCiAsync(gitHubClient, parts[0], parts[1], pr);
+            var (success, message) = await GitHubFlowService.RetryCiAsync(gitHubClient, parts[0], parts[1], pr, adoClient);
             actionSuccess = success;
             actionMessage = message;
 

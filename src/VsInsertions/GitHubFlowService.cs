@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace VsInsertions;
 
@@ -334,53 +335,131 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         HttpClient client,
         string owner,
         string repo,
-        FlowPr pr)
+        FlowPr pr,
+        HttpClient? adoClient = null)
     {
         if (pr.CheckRuns is null || pr.CheckRuns.Count == 0)
             return (false, "No check runs found.");
 
-        var failedRuns = pr.CheckRuns
+        var failedCheckRuns = pr.CheckRuns
             .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out")
             .ToList();
 
-        if (failedRuns.Count == 0)
+        if (failedCheckRuns.Count == 0)
             return (false, "No failed check runs to retry.");
 
-        // Get the check run details to find the associated workflow run IDs.
-        // GitHub check runs from Actions have an associated check_suite, which has a workflow run.
+        if (string.IsNullOrEmpty(pr.HeadSha))
+            return (false, "No head SHA available for this PR.");
+
         var retriedCount = 0;
         var errors = new List<string>();
+        var retriedCheckSuiteIds = new HashSet<long>();
 
-        foreach (var checkRun in failedRuns)
+        // 1. Try the Actions API for GitHub Actions workflow runs.
+        try
+        {
+            var runsUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/actions/runs?head_sha={pr.HeadSha}&per_page=100";
+            var runsJson = await client.GetStringAsync(runsUrl);
+            var runsNode = JsonNode.Parse(runsJson);
+            var runsArray = runsNode?["workflow_runs"]?.AsArray();
+
+            if (runsArray is not null)
+            {
+                var failedWorkflowRuns = runsArray
+                    .Where(r => r?["conclusion"]?.ToString() is "failure" or "cancelled" or "timed_out")
+                    .ToList();
+
+                foreach (var run in failedWorkflowRuns)
+                {
+                    var runId = run?["id"]?.GetValue<long>();
+                    var runName = run?["name"]?.ToString() ?? "unknown";
+                    var checkSuiteId = run?["check_suite_id"]?.GetValue<long>();
+                    if (runId is null) continue;
+
+                    try
+                    {
+                        var rerunUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/actions/runs/{runId}/rerun-failed-jobs";
+                        var response = await client.PostAsync(rerunUrl, null);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            retriedCount++;
+                            if (checkSuiteId is not null)
+                                retriedCheckSuiteIds.Add(checkSuiteId.Value);
+                        }
+                        else
+                        {
+                            var body = await response.Content.ReadAsStringAsync();
+                            errors.Add($"{runName}: {response.StatusCode} — {body}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{runName}: {ex.Message}");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Actions API might not be available; continue to fallbacks.
+        }
+
+        // 2. For remaining failed check runs, determine the CI system and retry accordingly.
+        //    Deduplicate by check suite ID since multiple check runs (jobs) share the same suite.
+        var retriedAdoBuildIds = new HashSet<string>();
+        var suitesToRerequest = new Dictionary<long, string>(); // suiteId → first check run name
+
+        foreach (var checkRun in failedCheckRuns)
         {
             try
             {
-                // Get check run details to find the check_suite_id.
                 var detailUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/check-runs/{checkRun.Id}";
                 var detailJson = await client.GetStringAsync(detailUrl);
                 var detailNode = JsonNode.Parse(detailJson);
                 var checkSuiteId = detailNode?["check_suite"]?["id"]?.GetValue<long>();
 
-                if (checkSuiteId is null)
+                if (checkSuiteId is not null && retriedCheckSuiteIds.Contains(checkSuiteId.Value))
+                    continue; // Already retried via Actions API or earlier iteration.
+
+                var appSlug = detailNode?["app"]?["slug"]?.ToString();
+
+                // Azure Pipelines: retry via ADO API.
+                if (appSlug == "azure-pipelines" && adoClient is not null)
                 {
-                    errors.Add($"{checkRun.Name}: no check suite found");
-                    continue;
+                    var detailsUrl = detailNode?["details_url"]?.ToString();
+                    var buildInfo = ParseAdoBuildUrl(detailsUrl);
+                    if (buildInfo is not null && !retriedAdoBuildIds.Contains(buildInfo.Value.BuildId))
+                    {
+                        var (org, project, buildId) = buildInfo.Value;
+                        var retryUrl = $"https://dev.azure.com/{org}/{project}/_apis/build/builds/{buildId}?retry=true&api-version=7.1";
+                        using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+                        var response = await adoClient.PatchAsync(retryUrl, content);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            retriedCount++;
+                            retriedAdoBuildIds.Add(buildId);
+                            if (checkSuiteId is not null)
+                                retriedCheckSuiteIds.Add(checkSuiteId.Value);
+                            continue;
+                        }
+                        else
+                        {
+                            var body = await response.Content.ReadAsStringAsync();
+                            errors.Add($"{checkRun.Name}: ADO {response.StatusCode} — {body}");
+                            retriedAdoBuildIds.Add(buildId); // Don't retry same build again.
+                            continue;
+                        }
+                    }
+                    continue; // Azure Pipelines but couldn't parse URL or already retried.
                 }
 
-                // Rerequest the check suite which re-runs it.
-                var rerequestUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/check-suites/{checkSuiteId}/rerequest";
-                var response = await client.PostAsync(rerequestUrl, null);
-                if (response.IsSuccessStatusCode)
-                {
-                    retriedCount++;
-                    checkRun.Status = "queued";
-                    checkRun.Conclusion = null;
-                }
-                else
-                {
-                    var body = await response.Content.ReadAsStringAsync();
-                    errors.Add($"{checkRun.Name}: {response.StatusCode} — {body}");
-                }
+                // Skip non-retriable apps (e.g., Maestro status aggregators).
+                if (appSlug is not (null or "github-actions"))
+                    continue;
+
+                // Fallback: try check-suite rerequest.
+                if (checkSuiteId is not null)
+                    suitesToRerequest.TryAdd(checkSuiteId.Value, checkRun.Name);
             }
             catch (Exception ex)
             {
@@ -388,11 +467,66 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             }
         }
 
-        var message = $"Retried {retriedCount}/{failedRuns.Count} failed check runs.";
+        foreach (var (suiteId, name) in suitesToRerequest)
+        {
+            try
+            {
+                var rerequestUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/check-suites/{suiteId}/rerequest";
+                var response = await client.PostAsync(rerequestUrl, null);
+                if (response.IsSuccessStatusCode)
+                {
+                    retriedCount++;
+                    retriedCheckSuiteIds.Add(suiteId);
+                }
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    errors.Add($"{name}: {response.StatusCode} — {body}");
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{name}: {ex.Message}");
+            }
+        }
+
+        // Mark retried check runs as queued.
+        if (retriedCount > 0)
+        {
+            foreach (var checkRun in failedCheckRuns)
+            {
+                checkRun.Status = "queued";
+                checkRun.Conclusion = null;
+            }
+        }
+
+        var message = $"Retried {retriedCount} check suite(s).";
         if (errors.Count > 0)
             message += " Errors: " + string.Join("; ", errors);
 
         return (retriedCount > 0, message);
+    }
+
+    /// <summary>
+    /// Parses an Azure DevOps build URL to extract organization, project, and build ID.
+    /// Expected format: https://dev.azure.com/{org}/{project}/_build/results?buildId={id}
+    /// </summary>
+    private static (string Org, string Project, string BuildId)? ParseAdoBuildUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return null;
+        if (uri.Host != "dev.azure.com")
+            return null;
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 3 || segments[2] != "_build")
+            return null;
+
+        var match = Regex.Match(uri.Query, @"[?&]buildId=(\d+)");
+        if (!match.Success)
+            return null;
+
+        return (segments[0], segments[1], match.Groups[1].Value);
     }
 
     private static bool IsBotLogin(string? login)
