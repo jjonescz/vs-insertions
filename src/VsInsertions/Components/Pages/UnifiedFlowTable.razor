@@ -47,6 +47,7 @@ else
                 var outCount = group.Count(r => !r.IsIncoming);
                 var circularCount = group.Count(r => IsCircular(r));
                 var prCount = group.Sum(r => r.Prs.Count);
+                var disabledCount = group.Count(r => r.Subscription?.Enabled == false);
                 var dirSymbol = circularCount == group.Count() ? "⇄" : (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
 
                 <tr class="table-light">
@@ -60,6 +61,7 @@ else
                             @if (pureInCount > 0 && outCount > 0) { <text> · </text> }
                             @if (outCount > 0) { <text>@outCount outgoing</text> }
                             @if (PrsAvailable && prCount > 0) { <text> · @prCount PR(s)</text> }
+                            @if (disabledCount > 0) { <text> · @disabledCount disabled</text> }
                         </small>
                     </td>
                 </tr>
@@ -68,21 +70,23 @@ else
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
+                    var isEnabled = row.Subscription?.Enabled ?? true;
+                    var enabledSuffix = isEnabled ? "" : " (disabled)";
 
                     <tr>
                         @* Direction *@
-                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@(IsCircular(row) ? "Circular (self → self)" : row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)")">
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@((IsCircular(row) ? "Circular (self ↔ self)" : row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)") + enabledSuffix)">
                             @if (IsCircular(row))
                             {
-                                <span class="badge bg-info text-dark">⇄</span>
+                                <span class="badge @(isEnabled ? "bg-info text-dark" : "border border-info text-info")">⇄</span>
                             }
                             else if (row.IsIncoming)
                             {
-                                <span class="badge bg-primary">←</span>
+                                <span class="badge @(isEnabled ? "bg-primary" : "border border-primary text-primary")">←</span>
                             }
                             else
                             {
-                                <span class="badge bg-secondary">→</span>
+                                <span class="badge @(isEnabled ? "bg-secondary" : "border border-secondary text-secondary")">→</span>
                             }
                         </td>
 
@@ -236,7 +240,7 @@ else
                                 <div class="p-2" style="background-color: #f8f9fa;">
                                     @if (row.Subscription?.Id != null)
                                     {
-                                        <strong>Subscription ID:</strong>@(" ")@row.Subscription.Id<br/>
+                                        <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
                                     }
                                     @foreach (var pr in row.Prs)
                                     {
