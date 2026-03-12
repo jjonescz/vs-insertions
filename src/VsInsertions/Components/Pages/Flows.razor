@@ -758,6 +758,17 @@ else
 
         currentRepo = newRepo;
 
+        // Clear stale PR data from previous repo.
+        flowPrs = null;
+        outgoingFlowPrs = null;
+        closedFlowPrs = null;
+        closedOutgoingFlowPrs = null;
+        locPrs = null;
+        closedLocPrs = null;
+        expandedRows.Clear();
+        prError = null;
+        outgoingPrError = null;
+
         // Update recent repos list (most recent first, no duplicates, capped).
         recentRepos.RemoveAll(r => string.Equals(r, newRepo, StringComparison.OrdinalIgnoreCase));
         recentRepos.Insert(0, newRepo);
@@ -765,6 +776,12 @@ else
             recentRepos.RemoveRange(MaxRecentRepos, recentRepos.Count - MaxRecentRepos);
 
         await SaveRecentReposAsync();
+
+        // Auto-load flow PRs for the new repo if GitHub is signed in.
+        if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        {
+            await LoadAllFlowPrsAsync();
+        }
     }
 
     private List<(string Name, string Label)> SortedRepoEntries()
