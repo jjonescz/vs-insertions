@@ -1,0 +1,431 @@
+@* Unified flow table: subscriptions grouped by connected repo with matched PRs. *@
+
+@if (PrError != null)
+{
+    <div class="alert alert-danger mt-2">@PrError</div>
+}
+@if (OutgoingPrError != null)
+{
+    <div class="alert alert-danger mt-2">@OutgoingPrError</div>
+}
+
+@if (Rows.Count == 0)
+{
+    <p class="text-muted">No subscriptions found.</p>
+}
+else
+{
+    var groups = Rows
+        .GroupBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
+        .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+    var totalCols = PrsAvailable ? 11 : 4;
+
+    <table class="table table-hover w-auto align-middle">
+        <thead>
+            <tr>
+                <th></th>
+                <th>Channel</th>
+                <th>Source Branch</th>
+                <th>Target Branch</th>
+                @if (PrsAvailable)
+                {
+                    <th>PR</th>
+                    <th>Date</th>
+                    <th>CI</th>
+                    <th title="Reviews">👀</th>
+                    <th title="Non-bot comments">💬</th>
+                    <th>Actions</th>
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var group in groups)
+            {
+                var inCount = group.Count(r => r.IsIncoming);
+                var outCount = group.Count(r => !r.IsIncoming);
+                var circularCount = group.Count(r => IsCircular(r));
+                var prCount = group.Sum(r => r.Prs.Count);
+                var disabledCount = group.Count(r => r.Subscription?.Enabled == false);
+                var dirSymbol = circularCount == group.Count() ? "⇄" : (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
+
+                <tr class="table-light">
+                    <td colspan="@totalCols">
+                        <strong>@dirSymbol @group.Key</strong>
+                        <small class="text-muted ms-2">
+                            @{ var pureInCount = inCount - circularCount; }
+                            @if (circularCount > 0) { <text>@circularCount circular</text> }
+                            @if (circularCount > 0 && (pureInCount > 0 || outCount > 0)) { <text> · </text> }
+                            @if (pureInCount > 0) { <text>@pureInCount incoming</text> }
+                            @if (pureInCount > 0 && outCount > 0) { <text> · </text> }
+                            @if (outCount > 0) { <text>@outCount outgoing</text> }
+                            @if (PrsAvailable && prCount > 0) { <text> · @prCount PR(s)</text> }
+                            @if (disabledCount > 0) { <text> · @disabledCount disabled</text> }
+                        </small>
+                    </td>
+                </tr>
+
+                @foreach (var row in group.OrderBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
+                {
+                    var primaryPr = row.Prs.FirstOrDefault();
+                    var isExpanded = ExpandedRows.Contains(row.RowKey);
+                    var isEnabled = row.Subscription?.Enabled ?? true;
+                    var enabledSuffix = isEnabled ? "" : " (disabled)";
+
+                    <tr>
+                        @* Direction *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@((IsCircular(row) ? "Circular (self ↔ self)" : row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)") + enabledSuffix)">
+                            @if (IsCircular(row))
+                            {
+                                <span class="badge @(isEnabled ? "bg-info text-dark" : "border border-info text-info")">⇄</span>
+                            }
+                            else if (row.IsIncoming)
+                            {
+                                <span class="badge @(isEnabled ? "bg-primary" : "border border-primary text-primary")">←</span>
+                            }
+                            else
+                            {
+                                <span class="badge @(isEnabled ? "bg-secondary" : "border border-secondary text-secondary")">→</span>
+                            }
+                        </td>
+
+                        @* Channel *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@ChannelTooltip(primaryPr, row)">
+                            @(row.Subscription?.Channel ?? "—")
+                        </td>
+
+                        @* Source Branch *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.SourceBranch ?? "—")</code></td>
+
+                        @* Target Branch *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
+
+
+                        @if (PrsAvailable)
+                        {
+                            @if (primaryPr != null)
+                            {
+                                @* PR link *@
+                                <td>
+                                    <span title="@PrStateTooltip(primaryPr)">@PrStateEmoji(primaryPr)</span>
+                                    <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
+                                    @if (row.Prs.Count > 1)
+                                    {
+                                        <span class="badge bg-secondary ms-1" style="cursor: pointer;"
+                                              title="Click to show all @row.Prs.Count PRs"
+                                              @onclick="() => ToggleRow(row)">+@(row.Prs.Count - 1)</span>
+                                    }
+                                </td>
+
+                                @* Date *@
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@(primaryPr.UpdatedAt.HasValue ? $"Updated: {primaryPr.UpdatedAt.Value:g}" : "Click to expand/collapse details")">
+                                    <small>@primaryPr.CreatedAt.ToString("d")</small>
+                                </td>
+
+                                @* CI *@
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
+                                    <span>@primaryPr.CiSummary</span>
+                                </td>
+
+                                @* Reviews *@
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
+                                    @if (primaryPr.Reviews != null)
+                                    {
+                                        @foreach (var review in primaryPr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
+                                        {
+                                            @if (review.AvatarUrl != null)
+                                            {
+                                                <img src="@review.AvatarUrl" title="@review.Author: @review.State"
+                                                     style="width: 1.2em; height: 1.2em; border-radius: 50%; border: 0.15em solid @ReviewStateToColor(review.State); margin-right: 2px;" />
+                                            }
+                                            else
+                                            {
+                                                <span title="@review.Author: @review.State" style="color: @ReviewStateToColor(review.State);">
+                                                    @review.Author[..1]
+                                                </span>
+                                            }
+                                        }
+                                    }
+                                </td>
+
+                                @* Comments *@
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">@(primaryPr.Comments?.Count ?? 0)</td>
+
+                                @* Actions *@
+                                <td>
+                                    @if (primaryPr.State == "open" && !primaryPr.Merged)
+                                    {
+                                        <button class="btn @(primaryPr.NeedsApproval ? "btn-success" : "btn-outline-success") btn-sm me-1"
+                                                @onclick="() => OnApprove.InvokeAsync(primaryPr)"
+                                                disabled="@(primaryPr == ActionInProgressPr)"
+                                                title="@(primaryPr.NeedsApproval ? "Approve this PR" : "Already approved — approve again")">
+                                            @if (primaryPr == ActionInProgressPr && ActionType == "approve")
+                                            {
+                                                @:Approving...
+                                            }
+                                            else
+                                            {
+                                                @:Approve
+                                            }
+                                        </button>
+
+                                        <button class="btn btn-primary btn-sm me-1"
+                                                @onclick="() => OnMerge.InvokeAsync(primaryPr)"
+                                                disabled="@(primaryPr == ActionInProgressPr || primaryPr.Mergeable == false)"
+                                                title="@(primaryPr.Mergeable == false ? "PR is not mergeable (conflicts or requirements not met)" : "Squash-merge and delete branch")">
+                                            @if (primaryPr == ActionInProgressPr && ActionType == "merge")
+                                            {
+                                                @:Merging...
+                                            }
+                                            else
+                                            {
+                                                @:Merge
+                                            }
+                                        </button>
+
+                                        @if (primaryPr.DetailsLoaded && primaryPr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
+                                        {
+                                            <button class="btn btn-warning btn-sm"
+                                                    @onclick="() => OnRetryCi.InvokeAsync(primaryPr)"
+                                                    disabled="@(primaryPr == ActionInProgressPr)"
+                                                    title="Re-run failed CI checks">
+                                                @if (primaryPr == ActionInProgressPr && ActionType == "retry")
+                                                {
+                                                    @:Retrying...
+                                                }
+                                                else
+                                                {
+                                                    @:Retry CI
+                                                }
+                                            </button>
+                                        }
+                                    }
+                                </td>
+
+                                @* Expand toggle *@
+                                <td>
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            @onclick="() => ToggleRow(row)"
+                                            title="Click to expand/collapse details">
+                                        @(isExpanded ? "▲" : "▼")
+                                    </button>
+                                </td>
+                            }
+                            else
+                            {
+                                @* No PRs matched *@
+                                <td class="text-muted">—</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td>
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            @onclick="() => ToggleRow(row)"
+                                            title="Click to expand/collapse details">
+                                        @(isExpanded ? "▲" : "▼")
+                                    </button>
+                                </td>
+                            }
+                        }
+                    </tr>
+
+                    @* Expanded details *@
+                    @if (isExpanded)
+                    {
+                        <tr>
+                            <td colspan="@totalCols">
+                                <div class="p-2" style="background-color: #f8f9fa;">
+                                    @if (row.Subscription?.Id != null)
+                                    {
+                                        <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
+                                    }
+                                    @foreach (var pr in row.Prs)
+                                    {
+                                        @if (row.Prs.Count > 1)
+                                        {
+                                            <div class="d-flex align-items-center gap-2 mb-1">
+                                                <h6 class="mb-0">
+                                                    <a href="@pr.Url" target="_blank">#@pr.Number</a>
+                                                </h6>
+                                                @if (pr != primaryPr && pr.State == "open" && !pr.Merged)
+                                                {
+                                                    <button class="btn @(pr.NeedsApproval ? "btn-success" : "btn-outline-success") btn-sm"
+                                                            @onclick="() => OnApprove.InvokeAsync(pr)"
+                                                            disabled="@(pr == ActionInProgressPr)"
+                                                            title="@(pr.NeedsApproval ? "Approve this PR" : "Already approved — approve again")">
+                                                        @(pr == ActionInProgressPr && ActionType == "approve" ? "Approving..." : "Approve")
+                                                    </button>
+                                                    <button class="btn btn-primary btn-sm"
+                                                            @onclick="() => OnMerge.InvokeAsync(pr)"
+                                                            disabled="@(pr == ActionInProgressPr || pr.Mergeable == false)"
+                                                            title="@(pr.Mergeable == false ? "PR is not mergeable" : "Squash-merge and delete branch")">
+                                                        @(pr == ActionInProgressPr && ActionType == "merge" ? "Merging..." : "Merge")
+                                                    </button>
+                                                    @if (pr.DetailsLoaded && pr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
+                                                    {
+                                                        <button class="btn btn-warning btn-sm"
+                                                                @onclick="() => OnRetryCi.InvokeAsync(pr)"
+                                                                disabled="@(pr == ActionInProgressPr)"
+                                                                title="Re-run failed CI checks">
+                                                            @(pr == ActionInProgressPr && ActionType == "retry" ? "Retrying..." : "Retry CI")
+                                                        </button>
+                                                    }
+                                                }
+                                            </div>
+                                        }
+
+                                        <strong>Title:</strong>@(" ")@pr.Title<br/>
+                                        <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
+                                        @if (pr.UpdatedAt.HasValue)
+                                        {
+                                            <text> · <strong>Updated:</strong> <span>@pr.UpdatedAt.Value.ToString("g")</span></text>
+                                        }
+                                        <br/>
+
+                                        @if (pr.CheckRuns is { Count: > 0 })
+                                        {
+                                            var nonSuccess = pr.CheckRuns.Where(c => c.Conclusion != "success").ToList();
+                                            var successCount = pr.CheckRuns.Count - nonSuccess.Count;
+                                            <strong>CI Checks:</strong>
+                                            @if (nonSuccess.Count > 0)
+                                            {
+                                                <ul class="mb-2">
+                                                    @foreach (var check in nonSuccess)
+                                                    {
+                                                        <li>
+                                                            @CheckConclusionToEmoji(check.Conclusion, check.Status)
+                                                            @if (check.Url != null)
+                                                            {
+                                                                <a href="@check.Url" target="_blank">@check.Name</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @check.Name
+                                                            }
+                                                            @(" ")
+                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                            @if (successCount > 0)
+                                            {
+                                                <div class="text-muted mb-2">✔ @successCount check(s) passed</div>
+                                            }
+                                        }
+
+                                        @if (pr.Comments is { Count: > 0 })
+                                        {
+                                            <strong>Comments (non-bot):</strong>
+                                            <ul class="mb-2">
+                                                @foreach (var comment in pr.Comments)
+                                                {
+                                                    <li>
+                                                        <strong>@comment.Author</strong>
+                                                        <small class="text-muted">@comment.CreatedAt.ToString("g")</small>:
+                                                        @comment.Body
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+
+                                        @if (pr.Reviews is { Count: > 0 })
+                                        {
+                                            <strong>Reviews:</strong>
+                                            <ul class="mb-0">
+                                                @foreach (var review in pr.Reviews)
+                                                {
+                                                    <li>
+                                                        <strong>@review.Author</strong>: @review.State
+                                                        @if (review.SubmittedAt.HasValue)
+                                                        {
+                                                            @(" ")
+                                                            <small class="text-muted">@review.SubmittedAt.Value.ToString("g")</small>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+
+                                        @if (row.Prs.Count > 1 && pr != row.Prs[^1])
+                                        {
+                                            <hr/>
+                                        }
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public List<UnifiedFlowRow> Rows { get; set; } = [];
+    [Parameter] public bool PrsAvailable { get; set; }
+    [Parameter] public string? PrError { get; set; }
+    [Parameter] public string? OutgoingPrError { get; set; }
+    [Parameter] public HashSet<string> ExpandedRows { get; set; } = [];
+    [Parameter] public FlowPr? ActionInProgressPr { get; set; }
+    [Parameter] public string? ActionType { get; set; }
+    [Parameter] public EventCallback<FlowPr> OnApprove { get; set; }
+    [Parameter] public EventCallback<FlowPr> OnMerge { get; set; }
+    [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
+
+    private void ToggleRow(UnifiedFlowRow row)
+    {
+        if (!ExpandedRows.Remove(row.RowKey))
+            ExpandedRows.Add(row.RowKey);
+    }
+
+    private static string ChannelTooltip(FlowPr? pr, UnifiedFlowRow row)
+    {
+        var parts = new List<string>();
+        if (pr != null) parts.Add("Click to expand/collapse details");
+        if (row.Subscription?.UpdateFrequency != null) parts.Add($"Frequency: {row.Subscription.UpdateFrequency}");
+        return string.Join("\n", parts);
+    }
+
+    private static string PrStateEmoji(FlowPr pr) => pr switch
+    {
+        { Merged: true } => "🟣",
+        { State: "closed" } => "🔴",
+        _ => "🟢",
+    };
+
+    private static string PrStateTooltip(FlowPr pr) => pr switch
+    {
+        { Merged: true } => "Merged",
+        { State: "closed" } => "Closed",
+        _ => "Open",
+    };
+
+    private static string ReviewStateToColor(string state) => state switch
+    {
+        "APPROVED" => "green",
+        "CHANGES_REQUESTED" => "red",
+        "COMMENTED" => "orange",
+        "DISMISSED" => "gray",
+        _ => "lightgray",
+    };
+
+    private static bool IsCircular(UnifiedFlowRow row) =>
+        row.Subscription != null &&
+        string.Equals(row.Subscription.SourceRepoShort, row.Subscription.TargetRepoShort, StringComparison.OrdinalIgnoreCase);
+
+    private static string CheckConclusionToEmoji(string? conclusion, string status) => (conclusion, status) switch
+    {
+        ("success", _) => "✔",
+        ("failure", _) => "✘",
+        ("cancelled", _) => "⊘",
+        ("timed_out", _) => "⏰",
+        (null, "queued") => "⏳",
+        (null, "in_progress") => "🔄",
+        _ => "—",
+    };
+}
