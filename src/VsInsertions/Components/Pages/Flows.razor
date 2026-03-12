@@ -609,17 +609,8 @@ else
 
             if (success)
             {
-                // Optimistic UI update: add our approval immediately so NeedsApproval flips.
-                pr.Reviews ??= [];
-                pr.Reviews.Add(new PrReview
-                {
-                    Author = gitHubUser ?? "me",
-                    State = "APPROVED",
-                    SubmittedAt = DateTimeOffset.UtcNow,
-                });
-
-                // Still refresh details in background for accuracy.
-                LoadPrDetailsInBackground(pr);
+                // Reload just this PR's details (reviews, checks, comments) for accuracy.
+                await LoadPrDetailsAsync(pr);
             }
         }
         catch (Exception ex)
