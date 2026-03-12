@@ -33,7 +33,7 @@ public class MaestroConfigServiceTests
         Assert.Equal("https://github.com/dotnet/dotnet", sub.TargetRepository);
         Assert.Equal("main", sub.TargetBranch);
         Assert.Equal("EveryBuild", sub.UpdateFrequency);
-        Assert.True(sub.Enabled);
+        Assert.True(sub.SourceEnabled);
         Assert.False(sub.Batchable);
         Assert.NotNull(sub.MergePolicies);
         Assert.Single(sub.MergePolicies);
@@ -89,7 +89,7 @@ public class MaestroConfigServiceTests
     }
 
     [Fact]
-    public void ParseDisabledSubscription()
+    public void ParseDisabledSourceSubscription()
     {
         var yaml = """
             - Channel: VS 17.14
@@ -104,8 +104,29 @@ public class MaestroConfigServiceTests
         var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
 
         Assert.Single(list);
-        Assert.False(list[0].Enabled);
+        Assert.True(list[0].Enabled);
+        Assert.False(list[0].SourceEnabled);
         Assert.True(list[0].Batchable);
+    }
+
+    [Fact]
+    public void ParseDisabledSubscription()
+    {
+        var yaml = """
+            - Channel: VS 17.14
+              Source Repository URL: https://github.com/dotnet/roslyn
+              Target Repository URL: https://github.com/dotnet/dotnet
+              Target Branch: release/17.14
+              Update Frequency: EveryDay
+              Enabled: false
+              Source Enabled: true
+            """;
+
+        var list = _deserializer.Deserialize<List<ArcadeSubscription>>(yaml);
+
+        Assert.Single(list);
+        Assert.False(list[0].Enabled);
+        Assert.True(list[0].SourceEnabled);
     }
 
     [Fact]

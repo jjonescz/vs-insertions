@@ -152,8 +152,11 @@ public sealed class ArcadeSubscription
     [YamlMember(Alias = "Update Frequency")]
     public string? UpdateFrequency { get; set; }
 
-    [YamlMember(Alias = "Source Enabled")]
+    [YamlMember(Alias = "Enabled")]
     public bool Enabled { get; set; } = true;
+
+    [YamlMember(Alias = "Source Enabled")]
+    public bool SourceEnabled { get; set; } = true;
 
     [YamlMember(Alias = "Batchable")]
     public bool Batchable { get; set; }
