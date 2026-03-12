@@ -160,14 +160,18 @@ else
 @* === Subscriptions display === *@
 @if (config != null)
 {
-    <div class="my-3">
+    <div class="my-3 d-flex align-items-center">
         <label class="me-1">Repository:</label>
-        <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo">
-            @foreach (var repo in repos)
+        <select class="form-select d-inline-block w-auto me-1" value="@currentRepo" @onchange="OnRepoSelectedAsync">
+            @foreach (var entry in SortedRepoEntries())
             {
-                <option value="@repo">@repo</option>
+                <option @key="entry.Name" value="@entry.Name">@entry.Label</option>
             }
         </select>
+        <button class="btn btn-sm btn-outline-warning me-3" @onclick="ToggleFavoriteAsync"
+                title="@(IsFavorite(currentRepo) ? "Remove from favorites" : "Add to favorites")">
+            @(IsFavorite(currentRepo) ? "\u2b50" : "\u2606")
+        </button>
 
         <span class="text-muted">@filteredSubscriptions.Count subscription(s)</span>
     </div>
@@ -189,6 +193,11 @@ else
 @code {
     // === State ===
     private bool browser;
+    private HashSet<string> favoriteRepos = new(StringComparer.OrdinalIgnoreCase);
+    private List<string> recentRepos = [];
+    private const int MaxRecentRepos = 5;
+    private const string FavoriteReposCookieName = "flows_favorite_repos";
+    private const string RecentReposCookieName = "flows_recent_repos";
     private string? adoAccessToken;
     private string? gitHubToken;
     private string? gitHubUser;
@@ -267,6 +276,9 @@ else
             {
                 SetupGitHubClient();
             }
+
+            await ReadFavoriteReposAsync();
+            await ReadRecentReposAsync();
 
             browser = true;
             StateHasChanged();
@@ -683,6 +695,92 @@ else
     private async Task ScrollToAlert()
     {
         await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+    }
+
+    // === Favorite / Recent repos ===
+
+    private async Task ReadFavoriteReposAsync()
+    {
+        var value = await JSRuntime.InvokeAsync<string>("getCookie", FavoriteReposCookieName);
+        if (!string.IsNullOrEmpty(value))
+        {
+            favoriteRepos = new HashSet<string>(
+                value.Split(',', StringSplitOptions.RemoveEmptyEntries),
+                StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private async Task SaveFavoriteReposAsync()
+    {
+        var value = string.Join(",", favoriteRepos);
+        await JSRuntime.InvokeVoidAsync("setCookie", FavoriteReposCookieName, value);
+    }
+
+    private async Task ReadRecentReposAsync()
+    {
+        var value = await JSRuntime.InvokeAsync<string>("getCookie", RecentReposCookieName);
+        if (!string.IsNullOrEmpty(value))
+        {
+            recentRepos = value.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+    }
+
+    private async Task SaveRecentReposAsync()
+    {
+        var value = string.Join(",", recentRepos);
+        await JSRuntime.InvokeVoidAsync("setCookie", RecentReposCookieName, value);
+    }
+
+    private bool IsFavorite(string? repo) =>
+        repo != null && favoriteRepos.Contains(repo);
+
+    private async Task ToggleFavoriteAsync()
+    {
+        if (currentRepo is null) return;
+
+        if (favoriteRepos.Contains(currentRepo))
+            favoriteRepos.Remove(currentRepo);
+        else
+            favoriteRepos.Add(currentRepo);
+
+        await SaveFavoriteReposAsync();
+    }
+
+    private async Task OnRepoSelectedAsync(ChangeEventArgs e)
+    {
+        var newRepo = e.Value?.ToString();
+        if (string.IsNullOrEmpty(newRepo)) return;
+
+        currentRepo = newRepo;
+
+        // Update recent repos list (most recent first, no duplicates, capped).
+        recentRepos.RemoveAll(r => string.Equals(r, newRepo, StringComparison.OrdinalIgnoreCase));
+        recentRepos.Insert(0, newRepo);
+        if (recentRepos.Count > MaxRecentRepos)
+            recentRepos.RemoveRange(MaxRecentRepos, recentRepos.Count - MaxRecentRepos);
+
+        await SaveRecentReposAsync();
+    }
+
+    private List<(string Name, string Label)> SortedRepoEntries()
+    {
+        var entries = new List<(string Name, string Label, int Order)>();
+
+        foreach (var repo in repos)
+        {
+            if (favoriteRepos.Contains(repo))
+                entries.Add((repo, $"\u2b50 {repo}", 0));
+            else if (recentRepos.Contains(repo))
+                entries.Add((repo, $"\ud83d\udd52 {repo}", 1));
+            else
+                entries.Add((repo, repo, 2));
+        }
+
+        return entries
+            .OrderBy(e => e.Order)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(e => (e.Name, e.Label))
+            .ToList();
     }
 
     /// <summary>
