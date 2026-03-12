@@ -296,12 +296,7 @@ else
         {
             FlowsState.AdoAccessToken = null;
             config = null;
-            flowPrs = null;
-            outgoingFlowPrs = null;
-            closedFlowPrs = null;
-            closedOutgoingFlowPrs = null;
-            locPrs = null;
-            closedLocPrs = null;
+            ClearFlowPrState();
         }
     }
 
@@ -370,11 +365,7 @@ else
         SetupGitHubClient();
         await FetchGitHubUserAsync();
 
-        // Auto-load flow PRs if subscriptions are already loaded.
-        if (config != null && currentRepo?.StartsWith("dotnet/") == true)
-        {
-            await LoadAllFlowPrsAsync();
-        }
+        await AutoLoadFlowPrsAsync();
     }
 
     private async Task GitHubPatLogOutAsync()
@@ -382,12 +373,7 @@ else
         await JSRuntime.InvokeVoidAsync("setCookie", GitHubPatCookieName, "");
         gitHubPatToken = null;
         FlowsState.GitHubPatToken = null;
-        flowPrs = null;
-        outgoingFlowPrs = null;
-        closedFlowPrs = null;
-        closedOutgoingFlowPrs = null;
-        locPrs = null;
-        closedLocPrs = null;
+        ClearFlowPrState();
     }
 
     // === Load Subscriptions ===
@@ -407,12 +393,7 @@ else
                 currentRepo = repos.FirstOrDefault(r => r.Equals("dotnet/roslyn", StringComparison.OrdinalIgnoreCase))
                     ?? repos[0];
             }
-            flowPrs = null; // Reset PRs when subscriptions change.
-            outgoingFlowPrs = null;
-            closedFlowPrs = null;
-            closedOutgoingFlowPrs = null;
-            locPrs = null;
-            closedLocPrs = null;
+            ClearFlowPrState();
         }
         catch (Exception ex)
         {
@@ -425,10 +406,24 @@ else
             StateHasChanged();
         }
 
-        // Auto-load flow PRs if GitHub is signed in and a dotnet/ repo is selected.
-        if (flowPrs == null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        await AutoLoadFlowPrsAsync();
+    }
+
+    private void ClearFlowPrState()
+    {
+        flowPrs = null;
+        outgoingFlowPrs = null;
+        closedFlowPrs = null;
+        closedOutgoingFlowPrs = null;
+        locPrs = null;
+        closedLocPrs = null;
+    }
+
+    private async Task AutoLoadFlowPrsAsync()
+    {
+        if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
-            await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
+            await LoadAllFlowPrsAsync();
         }
     }
 
@@ -758,13 +753,7 @@ else
 
         currentRepo = newRepo;
 
-        // Clear stale PR data from previous repo.
-        flowPrs = null;
-        outgoingFlowPrs = null;
-        closedFlowPrs = null;
-        closedOutgoingFlowPrs = null;
-        locPrs = null;
-        closedLocPrs = null;
+        ClearFlowPrState();
         expandedRows.Clear();
         prError = null;
         outgoingPrError = null;
@@ -777,11 +766,7 @@ else
 
         await SaveRecentReposAsync();
 
-        // Auto-load flow PRs for the new repo if GitHub is signed in.
-        if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
-        {
-            await LoadAllFlowPrsAsync();
-        }
+        await AutoLoadFlowPrsAsync();
     }
 
     private List<(string Name, string Label)> SortedRepoEntries()
