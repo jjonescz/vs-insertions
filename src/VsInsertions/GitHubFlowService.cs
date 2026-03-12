@@ -237,22 +237,31 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
     private async Task<List<CheckRunInfo>> LoadCheckRunsAsync(HttpClient client, string owner, string repo, string sha)
     {
-        var url = $"{GitHubApiBase}/repos/{owner}/{repo}/commits/{sha}/check-runs?per_page=100";
-        var json = await client.GetStringAsync(url);
-        var node = JsonNode.Parse(json);
-        var array = node?["check_runs"]?.AsArray();
-        if (array is null) return [];
+        var allCheckRuns = new List<CheckRunInfo>();
+        var page = 1;
 
-        return array
-            .Select(c => new CheckRunInfo
+        while (true)
+        {
+            var url = $"{GitHubApiBase}/repos/{owner}/{repo}/commits/{sha}/check-runs?per_page=100&page={page}";
+            var json = await client.GetStringAsync(url);
+            var node = JsonNode.Parse(json);
+            var array = node?["check_runs"]?.AsArray();
+            if (array is null || array.Count == 0) break;
+
+            allCheckRuns.AddRange(array.Select(c => new CheckRunInfo
             {
                 Id = (long)(c!["id"]!),
                 Name = c["name"]?.ToString() ?? "",
                 Status = c["status"]?.ToString() ?? "",
                 Conclusion = c["conclusion"]?.ToString(),
                 Url = c["html_url"]?.ToString() ?? c["details_url"]?.ToString(),
-            })
-            .ToList();
+            }));
+
+            if (array.Count < 100) break;
+            page++;
+        }
+
+        return allCheckRuns;
     }
 
     private async Task<List<PrComment>> LoadCommentsAsync(HttpClient client, string owner, string repo, int number)
@@ -338,6 +347,12 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         FlowPr pr,
         HttpClient? adoClient = null)
     {
+        if (string.IsNullOrEmpty(pr.HeadSha))
+            return (false, "No head SHA available for this PR.");
+
+        // Refresh check runs to get the latest status (they may have changed since loading).
+        pr.CheckRuns = await LoadCheckRunsAsync(client, owner, repo, pr.HeadSha);
+
         if (pr.CheckRuns is null || pr.CheckRuns.Count == 0)
             return (false, "No check runs found.");
 
@@ -347,9 +362,6 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
         if (failedCheckRuns.Count == 0)
             return (false, "No failed check runs to retry.");
-
-        if (string.IsNullOrEmpty(pr.HeadSha))
-            return (false, "No head SHA available for this PR.");
 
         var retriedCount = 0;
         var errors = new List<string>();
@@ -417,13 +429,12 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 var detailJson = await client.GetStringAsync(detailUrl);
                 var detailNode = JsonNode.Parse(detailJson);
                 var checkSuiteId = detailNode?["check_suite"]?["id"]?.GetValue<long>();
-
-                if (checkSuiteId is not null && retriedCheckSuiteIds.Contains(checkSuiteId.Value))
-                    continue; // Already retried via Actions API or earlier iteration.
-
                 var appSlug = detailNode?["app"]?["slug"]?.ToString();
 
                 // Azure Pipelines: retry via ADO API.
+                // Handle before the check-suite dedup because multiple ADO pipeline runs
+                // share the same check suite (one suite per GitHub App per commit).
+                // ADO builds are deduped by build ID instead.
                 if (appSlug == "azure-pipelines" && adoClient is not null)
                 {
                     var detailsUrl = detailNode?["details_url"]?.ToString();
@@ -438,8 +449,6 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                         {
                             retriedCount++;
                             retriedAdoBuildIds.Add(buildId);
-                            if (checkSuiteId is not null)
-                                retriedCheckSuiteIds.Add(checkSuiteId.Value);
                             continue;
                         }
                         else
@@ -452,6 +461,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                     }
                     continue; // Azure Pipelines but couldn't parse URL or already retried.
                 }
+
+                if (checkSuiteId is not null && retriedCheckSuiteIds.Contains(checkSuiteId.Value))
+                    continue; // Already retried via Actions API or earlier iteration.
 
                 // Skip non-retriable apps (e.g., Maestro status aggregators).
                 if (appSlug is not (null or "github-actions"))
@@ -509,24 +521,43 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
     /// <summary>
     /// Parses an Azure DevOps build URL to extract organization, project, and build ID.
-    /// Expected format: https://dev.azure.com/{org}/{project}/_build/results?buildId={id}
+    /// Handles both formats:
+    ///   https://dev.azure.com/{org}/{project}/_build/results?buildId={id}
+    ///   https://{org}.visualstudio.com/{project}/_build/results?buildId={id}
     /// </summary>
     private static (string Org, string Project, string BuildId)? ParseAdoBuildUrl(string? url)
     {
         if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return null;
-        if (uri.Host != "dev.azure.com")
-            return null;
 
-        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 3 || segments[2] != "_build")
+        string org;
+        string project;
+        if (uri.Host == "dev.azure.com")
+        {
+            var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 3 || segments[2] != "_build")
+                return null;
+            org = segments[0];
+            project = segments[1];
+        }
+        else if (uri.Host.EndsWith(".visualstudio.com", StringComparison.OrdinalIgnoreCase))
+        {
+            org = uri.Host[..uri.Host.IndexOf('.')];
+            var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 2 || segments[1] != "_build")
+                return null;
+            project = segments[0];
+        }
+        else
+        {
             return null;
+        }
 
         var match = Regex.Match(uri.Query, @"[?&]buildId=(\d+)");
         if (!match.Success)
             return null;
 
-        return (segments[0], segments[1], match.Groups[1].Value);
+        return (org, project, match.Groups[1].Value);
     }
 
     private static bool IsBotLogin(string? login)
