@@ -564,7 +564,11 @@ public sealed class FlowPr
         !Reviews
             .GroupBy(r => r.Author)
             .Select(g => g.Last())
-            .Any(r => r.State == "APPROVED");
+            .Any(r => r.State == "APPROVED") ||
+        Reviews
+            .GroupBy(r => r.Author)
+            .Select(g => g.Last())
+            .Any(r => r.State == "CHANGES_REQUESTED");
 
     public string CiSummary
     {
