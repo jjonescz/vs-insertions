@@ -11,5 +11,5 @@ function getCookie(name) {
 }
 
 function setCookie(name, value) {
-    document.cookie = name + "=" + value + ";secure;samesite=strict";
+    document.cookie = name + "=" + encodeURIComponent(value) + ";path=/;secure;samesite=strict";
 }
