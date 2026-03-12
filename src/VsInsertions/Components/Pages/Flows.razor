@@ -36,47 +36,74 @@
 
 @* === Auth & Load controls === *@
 @{
-    var needsAdoLogin = string.IsNullOrEmpty(adoAccessToken);
-    var needsGitHubLogin = browser && string.IsNullOrEmpty(gitHubToken) && string.IsNullOrEmpty(gitHubPatToken);
-    var needsAnyLogin = needsAdoLogin || needsGitHubLogin;
+    var fullyLoggedIn = !string.IsNullOrEmpty(adoAccessToken) && browser
+        && (!string.IsNullOrEmpty(gitHubToken) || !string.IsNullOrEmpty(gitHubPatToken));
+
+    RenderFragment adoLogin = @<AdoLogin Organization="dnceng" CookieName="flows_ado_token"
+              AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
+              LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />;
+
+    RenderFragment gitHubStatus = @<text>
+        @if (string.IsNullOrEmpty(gitHubToken))
+        {
+            <span class="badge bg-success">GitHub: @(gitHubUser ?? "PAT")</span>
+            <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogOutAsync">Sign out (GitHub PAT)</button>
+        }
+        else
+        {
+            <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
+            <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
+        }
+    </text>;
+
+    RenderFragment subscriptionButtons = @<text>
+        <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
+            @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
+        </button>
+        @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        {
+            <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
+                @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
+            </button>
+        }
+    </text>;
 }
 
-@if (needsAnyLogin)
+@if (fullyLoggedIn)
 {
+    @* Compact single-line layout when fully authenticated. *@
+    <div class="my-2 d-flex flex-wrap align-items-center gap-2">
+        @adoLogin
+        @gitHubStatus
+        @subscriptionButtons
+    </div>
+}
+else
+{
+    @* Multi-row layout: show login controls for missing credentials. *@
     <div class="my-2">
-        <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
-                  AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
-                  LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
+        @adoLogin
     </div>
 
     @if (browser)
     {
         <div class="my-2 d-flex flex-wrap align-items-center gap-2">
-            @if (string.IsNullOrEmpty(gitHubToken))
+            @if (string.IsNullOrEmpty(gitHubToken) && string.IsNullOrEmpty(gitHubPatToken))
             {
                 <a href="/signin-github-start?returnUrl=/flows" class="btn btn-dark">
                     Sign in with GitHub
                 </a>
 
-                @if (string.IsNullOrEmpty(gitHubPatToken))
-                {
-                    <div class="d-flex align-items-center gap-2">
-                        <input type="password" class="form-control form-control-sm" style="width: 260px;"
-                               placeholder="GitHub PAT (fallback)" @bind="gitHubPatInput" />
-                        <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogInAsync"
-                                disabled="@string.IsNullOrEmpty(gitHubPatInput)">Use PAT</button>
-                    </div>
-                }
-                else
-                {
-                    <span class="badge bg-success">GitHub: @(gitHubUser ?? "PAT")</span>
-                    <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogOutAsync">Sign out (GitHub PAT)</button>
-                }
+                <div class="d-flex align-items-center gap-2">
+                    <input type="password" class="form-control form-control-sm" style="width: 260px;"
+                           placeholder="GitHub PAT (fallback)" @bind="gitHubPatInput" />
+                    <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogInAsync"
+                            disabled="@string.IsNullOrEmpty(gitHubPatInput)">Use PAT</button>
+                </div>
             }
             else
             {
-                <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
-                <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
+                @gitHubStatus
             }
         </div>
 
@@ -105,51 +132,9 @@
     @if (!string.IsNullOrEmpty(adoAccessToken))
     {
         <div class="my-2 d-flex flex-wrap align-items-center gap-2">
-            <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
-                @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
-            </button>
-
-            @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
-            {
-                <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
-                    @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
-                </button>
-            }
+            @subscriptionButtons
         </div>
     }
-}
-else
-{
-    <div class="my-2 d-flex flex-wrap align-items-center gap-2">
-        <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
-                  AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
-                  LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
-
-        @if (browser)
-        {
-            @if (string.IsNullOrEmpty(gitHubToken))
-            {
-                <span class="badge bg-success">GitHub: @(gitHubUser ?? "PAT")</span>
-                <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogOutAsync">Sign out (GitHub PAT)</button>
-            }
-            else
-            {
-                <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
-                <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
-            }
-        }
-
-        <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
-            @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
-        </button>
-
-        @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
-        {
-            <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
-                @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
-            </button>
-        }
-    </div>
 }
 
 @if (subscriptionError != null)
