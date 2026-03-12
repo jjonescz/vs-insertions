@@ -177,7 +177,7 @@ else
                       PrsAvailable="@(!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)"
                       PrError="@prError"
                       OutgoingPrError="@outgoingPrError"
-                      ExpandedPrs="expandedPrs"
+                      ExpandedRows="expandedRows"
                       ActionInProgressPr="actionInProgressPr"
                       ActionType="@actionType"
                       OnApprove="ApproveAsync"
@@ -218,7 +218,7 @@ else
     private bool loadingOutgoingPrs;
     private string? prError;
     private string? outgoingPrError;
-    private HashSet<int> expandedPrs => FlowsState.ExpandedPrs;
+    private HashSet<string> expandedRows => FlowsState.ExpandedRows;
 
     // Action state.
     private FlowPr? actionInProgressPr;
@@ -432,7 +432,7 @@ else
 
         loadingPrs = true;
         prError = null;
-        expandedPrs.Clear();
+        expandedRows.Clear();
         StateHasChanged();
 
         try

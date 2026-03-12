@@ -67,11 +67,11 @@ else
                 @foreach (var row in group.OrderBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
-                    var isExpanded = primaryPr != null && ExpandedPrs.Contains(primaryPr.Number);
+                    var isExpanded = ExpandedRows.Contains(row.RowKey);
 
                     <tr>
                         @* Direction *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : (IsCircular(row) ? "Circular (self → self)" : row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)"))">
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@(IsCircular(row) ? "Circular (self → self)" : row.IsIncoming ? "Incoming (other → selected)" : "Outgoing (selected → other)")">
                             @if (IsCircular(row))
                             {
                                 <span class="badge bg-info text-dark">⇄</span>
@@ -87,15 +87,15 @@ else
                         </td>
 
                         @* Channel *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@ChannelTooltip(primaryPr, row)">
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@ChannelTooltip(primaryPr, row)">
                             @(row.Subscription?.Channel ?? "—")
                         </td>
 
                         @* Source Branch *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")"><code>@(row.SourceBranch ?? "—")</code></td>
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.SourceBranch ?? "—")</code></td>
 
                         @* Target Branch *@
-                        <td style="@(primaryPr != null ? "cursor: pointer;" : "")" @onclick="() => { if (primaryPr != null) ToggleDetails(primaryPr); }" title="@(primaryPr != null ? "Click to expand/collapse details" : "")"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
 
 
                         @if (PrsAvailable)
@@ -110,22 +110,22 @@ else
                                     {
                                         <span class="badge bg-secondary ms-1" style="cursor: pointer;"
                                               title="Click to show all @row.Prs.Count PRs"
-                                              @onclick="() => ToggleDetails(primaryPr)">+@(row.Prs.Count - 1)</span>
+                                              @onclick="() => ToggleRow(row)">+@(row.Prs.Count - 1)</span>
                                     }
                                 </td>
 
                                 @* Date *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="@(primaryPr.UpdatedAt.HasValue ? $"Updated: {primaryPr.UpdatedAt.Value:g}" : "Click to expand/collapse details")">
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@(primaryPr.UpdatedAt.HasValue ? $"Updated: {primaryPr.UpdatedAt.Value:g}" : "Click to expand/collapse details")">
                                     <small>@primaryPr.CreatedAt.ToString("d")</small>
                                 </td>
 
                                 @* CI *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
                                     <span>@primaryPr.CiSummary</span>
                                 </td>
 
                                 @* Reviews *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
                                     @if (primaryPr.Reviews != null)
                                     {
                                         @foreach (var review in primaryPr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
@@ -146,7 +146,7 @@ else
                                 </td>
 
                                 @* Comments *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleDetails(primaryPr)" title="Click to expand/collapse details">@(primaryPr.Comments?.Count ?? 0)</td>
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">@(primaryPr.Comments?.Count ?? 0)</td>
 
                                 @* Actions *@
                                 <td>
@@ -202,7 +202,7 @@ else
                                 @* Expand toggle *@
                                 <td>
                                     <button class="btn btn-outline-secondary btn-sm"
-                                            @onclick="() => ToggleDetails(primaryPr)"
+                                            @onclick="() => ToggleRow(row)"
                                             title="Click to expand/collapse details">
                                         @(isExpanded ? "▲" : "▼")
                                     </button>
@@ -217,17 +217,27 @@ else
                                 <td></td>
                                 <td></td>
                                 <td></td>
-                                <td></td>
+                                <td>
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            @onclick="() => ToggleRow(row)"
+                                            title="Click to expand/collapse details">
+                                        @(isExpanded ? "▲" : "▼")
+                                    </button>
+                                </td>
                             }
                         }
                     </tr>
 
-                    @* Expanded PR details *@
+                    @* Expanded details *@
                     @if (isExpanded)
                     {
                         <tr>
                             <td colspan="@totalCols">
                                 <div class="p-2" style="background-color: #f8f9fa;">
+                                    @if (row.Subscription?.Id != null)
+                                    {
+                                        <strong>Subscription ID:</strong>@(" ")@row.Subscription.Id<br/>
+                                    }
                                     @foreach (var pr in row.Prs)
                                     {
                                         @if (row.Prs.Count > 1)
@@ -356,17 +366,17 @@ else
     [Parameter] public bool PrsAvailable { get; set; }
     [Parameter] public string? PrError { get; set; }
     [Parameter] public string? OutgoingPrError { get; set; }
-    [Parameter] public HashSet<int> ExpandedPrs { get; set; } = [];
+    [Parameter] public HashSet<string> ExpandedRows { get; set; } = [];
     [Parameter] public FlowPr? ActionInProgressPr { get; set; }
     [Parameter] public string? ActionType { get; set; }
     [Parameter] public EventCallback<FlowPr> OnApprove { get; set; }
     [Parameter] public EventCallback<FlowPr> OnMerge { get; set; }
     [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
 
-    private void ToggleDetails(FlowPr pr)
+    private void ToggleRow(UnifiedFlowRow row)
     {
-        if (!ExpandedPrs.Remove(pr.Number))
-            ExpandedPrs.Add(pr.Number);
+        if (!ExpandedRows.Remove(row.RowKey))
+            ExpandedRows.Add(row.RowKey);
     }
 
     private static string ChannelTooltip(FlowPr? pr, UnifiedFlowRow row)

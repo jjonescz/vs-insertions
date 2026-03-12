@@ -128,6 +128,9 @@ public sealed record MaestroConfig(
 
 public sealed class ArcadeSubscription
 {
+    [YamlMember(Alias = "Id")]
+    public string? Id { get; set; }
+
     [YamlMember(Alias = "Channel")]
     public string? Channel { get; set; }
 
