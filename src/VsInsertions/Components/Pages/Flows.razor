@@ -1,5 +1,6 @@
 @page "/flows"
 @using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.DataProtection
 @using System.Text.Json.Nodes
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JSRuntime
@@ -11,6 +12,7 @@
 @inject ILogger<Flows> Logger
 @inject ILoggerFactory LoggerFactory
 @inject FlowsState FlowsState
+@inject IDataProtectionProvider DataProtectionProvider
 
 <PageTitle>Flows</PageTitle>
 
@@ -33,41 +35,122 @@
 }
 
 @* === Auth & Load controls === *@
-<div class="my-2 d-flex flex-wrap align-items-center gap-2">
-    <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
-              AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
-              LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
+@{
+    var needsAdoLogin = string.IsNullOrEmpty(adoAccessToken);
+    var needsGitHubLogin = browser && string.IsNullOrEmpty(gitHubToken) && string.IsNullOrEmpty(gitHubPatToken);
+    var needsAnyLogin = needsAdoLogin || needsGitHubLogin;
+}
+
+@if (needsAnyLogin)
+{
+    <div class="my-2">
+        <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
+                  AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
+                  LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
+    </div>
 
     @if (browser)
     {
-        @if (string.IsNullOrEmpty(gitHubToken))
+        <div class="my-2 d-flex flex-wrap align-items-center gap-2">
+            @if (string.IsNullOrEmpty(gitHubToken))
+            {
+                <a href="/signin-github-start?returnUrl=/flows" class="btn btn-dark">
+                    Sign in with GitHub
+                </a>
+
+                @if (string.IsNullOrEmpty(gitHubPatToken))
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="password" class="form-control form-control-sm" style="width: 260px;"
+                               placeholder="GitHub PAT (fallback)" @bind="gitHubPatInput" />
+                        <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogInAsync"
+                                disabled="@string.IsNullOrEmpty(gitHubPatInput)">Use PAT</button>
+                    </div>
+                }
+                else
+                {
+                    <span class="badge bg-success">GitHub: PAT</span>
+                    <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogOutAsync">Sign out (GitHub PAT)</button>
+                }
+            }
+            else
+            {
+                <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
+                <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
+            }
+        </div>
+
+        @if (string.IsNullOrEmpty(gitHubToken) && string.IsNullOrEmpty(gitHubPatToken))
         {
-            <a href="/signin-github-start?returnUrl=/flows" class="btn btn-dark">
-                Sign in with GitHub
-            </a>
-            <small class="text-muted">Required for viewing and managing flow PRs</small>
-        }
-        else
-        {
-            <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
-            <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
+            <details class="my-2">
+                <summary>How do I get a GitHub PAT?</summary>
+                <p>
+                    Use the <a href="https://cli.github.com/" target="_blank">GitHub CLI</a>:
+                </p>
+                <ol>
+                    <li>
+                        <CopyableCode Code="gh auth token" />
+                    </li>
+                </ol>
+                <p>
+                    Alternatively, go to
+                    <a href="https://github.com/settings/tokens?type=beta" target="_blank">GitHub &gt; Settings &gt; Personal access tokens</a>
+                    and create a fine-grained token with <code>Pull requests (Read and write)</code> permission
+                    for the repositories you need.
+                </p>
+            </details>
         }
     }
 
     @if (!string.IsNullOrEmpty(adoAccessToken))
     {
+        <div class="my-2 d-flex flex-wrap align-items-center gap-2">
+            <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
+                @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
+            </button>
+
+            @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+            {
+                <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
+                    @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
+                </button>
+            }
+        </div>
+    }
+}
+else
+{
+    <div class="my-2 d-flex flex-wrap align-items-center gap-2">
+        <AdoLogin Organization="dnceng" CookieName="flows_ado_token"
+                  AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
+                  LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />
+
+        @if (browser)
+        {
+            @if (string.IsNullOrEmpty(gitHubToken))
+            {
+                <span class="badge bg-success">GitHub: PAT</span>
+                <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogOutAsync">Sign out (GitHub PAT)</button>
+            }
+            else
+            {
+                <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
+                <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
+            }
+        }
+
         <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
             @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
         </button>
 
-        @if (config != null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
             <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
                 @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
             </button>
         }
-    }
-</div>
+    </div>
+}
 
 @if (subscriptionError != null)
 {
@@ -91,7 +174,7 @@
 
     @* === Unified flows === *@
     <UnifiedFlowTable Rows="unifiedRows"
-                      PrsAvailable="@(!string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)"
+                      PrsAvailable="@(!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)"
                       PrError="@prError"
                       OutgoingPrError="@outgoingPrError"
                       ExpandedPrs="expandedPrs"
@@ -109,8 +192,13 @@
     private string? adoAccessToken;
     private string? gitHubToken;
     private string? gitHubUser;
+    private string? gitHubPatToken;
+    private string? gitHubPatInput;
     private HttpClient adoClient = new();
     private HttpClient gitHubClient = new();
+
+    /// <summary>Effective GitHub token: OAuth takes priority, PAT is fallback.</summary>
+    private string? effectiveGitHubToken => gitHubToken ?? gitHubPatToken;
 
     // Subscriptions state (preserved across navigations via FlowsState).
     private MaestroConfig? config { get => FlowsState.Config; set => FlowsState.Config = value; }
@@ -167,7 +255,13 @@
                 gitHubUser = httpContext.User.Identity.Name;
             }
 
-            if (!string.IsNullOrEmpty(gitHubToken))
+            // Read GitHub PAT from cookie as fallback.
+            if (string.IsNullOrEmpty(gitHubToken))
+            {
+                await ReadGitHubPatCookieAsync();
+            }
+
+            if (!string.IsNullOrEmpty(effectiveGitHubToken))
             {
                 SetupGitHubClient();
             }
@@ -215,9 +309,62 @@
     private void SetupGitHubClient()
     {
         gitHubClient = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")));
-        gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {gitHubToken}");
+        gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {effectiveGitHubToken}");
         gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
         gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+    }
+
+    // === GitHub PAT ===
+    private const string GitHubPatCookieName = "flows_github_pat";
+
+    private async Task ReadGitHubPatCookieAsync()
+    {
+        var encrypted = await JSRuntime.InvokeAsync<string>("getCookie", GitHubPatCookieName);
+        try
+        {
+            var token = string.IsNullOrEmpty(encrypted) ? null :
+                DataProtectionProvider.CreateProtector(GitHubPatCookieName).Unprotect(encrypted);
+            if (!string.IsNullOrEmpty(token))
+            {
+                gitHubPatToken = token;
+                FlowsState.GitHubPatToken = token;
+            }
+        }
+        catch
+        {
+            // Cookie corrupt or key rotated — ignore.
+        }
+    }
+
+    private async Task GitHubPatLogInAsync()
+    {
+        if (string.IsNullOrEmpty(gitHubPatInput))
+            return;
+
+        var token = gitHubPatInput;
+        var encrypted = DataProtectionProvider.CreateProtector(GitHubPatCookieName).Protect(token);
+        await JSRuntime.InvokeVoidAsync("setCookie", GitHubPatCookieName, encrypted);
+        gitHubPatInput = null;
+        gitHubPatToken = token;
+        FlowsState.GitHubPatToken = token;
+        SetupGitHubClient();
+
+        // Auto-load flow PRs if subscriptions are already loaded.
+        if (config != null && currentRepo?.StartsWith("dotnet/") == true)
+        {
+            await LoadAllFlowPrsAsync();
+        }
+    }
+
+    private async Task GitHubPatLogOutAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("setCookie", GitHubPatCookieName, "");
+        gitHubPatToken = null;
+        FlowsState.GitHubPatToken = null;
+        flowPrs = null;
+        outgoingFlowPrs = null;
+        closedFlowPrs = null;
+        closedOutgoingFlowPrs = null;
     }
 
     // === Load Subscriptions ===
@@ -254,7 +401,7 @@
         }
 
         // Auto-load flow PRs if GitHub is signed in and a dotnet/ repo is selected.
-        if (flowPrs == null && !string.IsNullOrEmpty(gitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        if (flowPrs == null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
             await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
         }
