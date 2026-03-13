@@ -322,7 +322,11 @@ else
 
     private void SetupGitHubClient()
     {
-        gitHubClient = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")));
+        var rateLimitHandler = new GitHubRateLimitHandler(LoggerFactory.CreateLogger("HTTP.GitHub.RateLimit"))
+        {
+            InnerHandler = new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")),
+        };
+        gitHubClient = new HttpClient(rateLimitHandler);
         gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {effectiveGitHubToken}");
         gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
         gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
