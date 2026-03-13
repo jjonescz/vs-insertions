@@ -22,16 +22,20 @@
 
 @if (actionMessage != null)
 {
-    <a href="javascript:void(0)" @onclick="ScrollToAlert" @onclick:preventDefault
+    <a href="javascript:void(0)" @onclick="ToggleActionAlert" @onclick:preventDefault
        title="@actionMessage"
        style="position: fixed; top: 0.6rem; right: 10rem; z-index: 2; font-size: 1.3rem; cursor: pointer; text-decoration: none;">
         @(actionSuccess ? "\u2705" : "\u26A0\uFE0F")
     </a>
 
-    <div id="action-alert" class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
-        @actionMessage
-        <button type="button" class="btn-close" @onclick="() => actionMessage = null"></button>
-    </div>
+    @* Don't display the alert by default to avoid layout shift when buttons are clicked. *@
+    @if (showActionAlert)
+    {
+        <div id="action-alert" class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
+            @actionMessage
+            <button type="button" class="btn-close" @onclick="DismissActionAlert"></button>
+        </div>
+    }
 }
 
 @* === Auth & Load controls === *@
@@ -219,6 +223,8 @@ else
     private string? actionType;
     private string? actionMessage;
     private bool actionSuccess;
+    private bool showActionAlert;
+    private bool scrollToAlert;
 
     private List<ArcadeSubscription> filteredSubscriptions =>
         config?.Subscriptions
@@ -241,6 +247,12 @@ else
     // === Lifecycle ===
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (scrollToAlert)
+        {
+            scrollToAlert = false;
+            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+        }
+
         if (firstRender)
         {
             // Read GitHub token from OAuth cookie.
@@ -692,9 +704,16 @@ else
 
     // === UI Helpers ===
 
-    private async Task ScrollToAlert()
+    private void ToggleActionAlert()
     {
-        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+        showActionAlert = !showActionAlert;
+        scrollToAlert = showActionAlert;
+    }
+
+    private void DismissActionAlert()
+    {
+        actionMessage = null;
+        showActionAlert = false;
     }
 
     // === Favorite / Recent repos ===
