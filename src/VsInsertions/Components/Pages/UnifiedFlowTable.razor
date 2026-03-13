@@ -125,12 +125,23 @@ else
 
                                 @* CI *@
                                 <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
-                                    <span>@primaryPr.CiSummary</span>
+                                    @if (!primaryPr.DetailsLoaded)
+                                    {
+                                        <span title="Loading details…">⏳</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@primaryPr.CiSummary</span>
+                                    }
                                 </td>
 
                                 @* Reviews *@
                                 <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
-                                    @if (primaryPr.Reviews != null)
+                                    @if (primaryPr.Reviews is null && !primaryPr.DetailsLoaded)
+                                    {
+                                        <span title="Loading details…">⏳</span>
+                                    }
+                                    else if (primaryPr.Reviews != null)
                                     {
                                         @foreach (var review in primaryPr.Reviews.GroupBy(r => r.Author).Select(g => g.Last()))
                                         {
@@ -150,7 +161,16 @@ else
                                 </td>
 
                                 @* Comments *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">@(primaryPr.Comments?.Count ?? 0)</td>
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
+                                    @if (!primaryPr.DetailsLoaded)
+                                    {
+                                        <span title="Loading details…">⏳</span>
+                                    }
+                                    else
+                                    {
+                                        @(primaryPr.Comments?.Count ?? 0)
+                                    }
+                                </td>
 
                                 @* Actions *@
                                 <td>
@@ -393,7 +413,6 @@ else
 
     private static string PrStateEmoji(FlowPr pr) => pr switch
     {
-        { DetailsLoaded: false } => "⏳",
         { Merged: true } => "🟣",
         { State: "closed" } => "🔴",
         _ => "🟢",
@@ -401,7 +420,6 @@ else
 
     private static string PrStateTooltip(FlowPr pr) => pr switch
     {
-        { DetailsLoaded: false } => "Loading…",
         { Merged: true } => "Merged",
         { State: "closed" } => "Closed",
         _ => "Open",
