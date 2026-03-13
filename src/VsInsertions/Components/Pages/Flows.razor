@@ -22,16 +22,20 @@
 
 @if (actionMessage != null)
 {
-    <a href="javascript:void(0)" @onclick="ScrollToAlert" @onclick:preventDefault
+    <a href="javascript:void(0)" @onclick="ToggleActionAlert" @onclick:preventDefault
        title="@actionMessage"
        style="position: fixed; top: 0.6rem; right: 10rem; z-index: 2; font-size: 1.3rem; cursor: pointer; text-decoration: none;">
         @(actionSuccess ? "\u2705" : "\u26A0\uFE0F")
     </a>
 
-    <div id="action-alert" class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
-        @actionMessage
-        <button type="button" class="btn-close" @onclick="() => actionMessage = null"></button>
-    </div>
+    @* Don't display the alert by default to avoid layout shift when buttons are clicked. *@
+    @if (showActionAlert)
+    {
+        <div id="action-alert" class="alert @(actionSuccess ? "alert-success" : "alert-warning") alert-dismissible mt-3">
+            @actionMessage
+            <button type="button" class="btn-close" @onclick="DismissActionAlert"></button>
+        </div>
+    }
 }
 
 @* === Auth & Load controls === *@
@@ -65,6 +69,10 @@
             <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
                 @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
             </button>
+        }
+        @if (rateLimitWaiting)
+        {
+            <span class="badge bg-warning text-dark" title="Waiting for GitHub rate limit reset">⏳ Rate limited</span>
         }
     </text>;
 }
@@ -171,7 +179,8 @@ else
                       ActionType="@actionType"
                       OnApprove="ApproveAsync"
                       OnMerge="MergeAsync"
-                      OnRetryCi="RetryCiAsync" />
+                      OnRetryCi="RetryCiAsync"
+                      OnRowExpanded="OnRowExpandedAsync" />
 }
 
 
@@ -190,6 +199,8 @@ else
     private string? gitHubPatInput;
     private HttpClient adoClient = new();
     private HttpClient gitHubClient = new();
+    private GitHubRateLimitHandler? rateLimitHandler;
+    private bool rateLimitWaiting;
 
     /// <summary>Effective GitHub token: OAuth takes priority, PAT is fallback.</summary>
     private string? effectiveGitHubToken => gitHubToken ?? gitHubPatToken;
@@ -201,24 +212,29 @@ else
     private bool loadingSubscriptions;
     private string? subscriptionError;
 
-    // Flow PRs state (preserved across navigations via FlowsState).
-    private List<FlowPr>? flowPrs { get => FlowsState.FlowPrs; set => FlowsState.FlowPrs = value; }
-    private List<FlowPr>? outgoingFlowPrs { get => FlowsState.OutgoingFlowPrs; set => FlowsState.OutgoingFlowPrs = value; }
-    private List<FlowPr>? closedFlowPrs { get => FlowsState.ClosedFlowPrs; set => FlowsState.ClosedFlowPrs = value; }
-    private List<FlowPr>? closedOutgoingFlowPrs { get => FlowsState.ClosedOutgoingFlowPrs; set => FlowsState.ClosedOutgoingFlowPrs = value; }
-    private List<FlowPr>? locPrs { get => FlowsState.LocPrs; set => FlowsState.LocPrs = value; }
-    private List<FlowPr>? closedLocPrs { get => FlowsState.ClosedLocPrs; set => FlowsState.ClosedLocPrs = value; }
+    // Flow PRs state (preserved across navigations via FlowsState, cached per repo).
+    private RepoPrCache currentPrCache => FlowsState.GetOrCreatePrCache(currentRepo ?? "");
+    private List<FlowPr>? flowPrs { get => currentPrCache.FlowPrs; set => currentPrCache.FlowPrs = value; }
+    private List<FlowPr>? outgoingFlowPrs { get => currentPrCache.OutgoingFlowPrs; set => currentPrCache.OutgoingFlowPrs = value; }
+    private List<FlowPr>? closedFlowPrs { get => currentPrCache.ClosedFlowPrs; set => currentPrCache.ClosedFlowPrs = value; }
+    private List<FlowPr>? closedOutgoingFlowPrs { get => currentPrCache.ClosedOutgoingFlowPrs; set => currentPrCache.ClosedOutgoingFlowPrs = value; }
+    private List<FlowPr>? locPrs { get => currentPrCache.LocPrs; set => currentPrCache.LocPrs = value; }
+    private List<FlowPr>? closedLocPrs { get => currentPrCache.ClosedLocPrs; set => currentPrCache.ClosedLocPrs = value; }
+    private List<FlowPr>? mergePrs { get => currentPrCache.MergePrs; set => currentPrCache.MergePrs = value; }
+    private List<FlowPr>? closedMergePrs { get => currentPrCache.ClosedMergePrs; set => currentPrCache.ClosedMergePrs = value; }
     private bool loadingPrs;
     private bool loadingOutgoingPrs;
     private string? prError;
     private string? outgoingPrError;
-    private HashSet<string> expandedRows => FlowsState.ExpandedRows;
+    private HashSet<string> expandedRows => currentPrCache.ExpandedRows;
 
     // Action state.
     private FlowPr? actionInProgressPr;
     private string? actionType;
     private string? actionMessage;
     private bool actionSuccess;
+    private bool showActionAlert;
+    private bool scrollToAlert;
 
     private List<ArcadeSubscription> filteredSubscriptions =>
         config?.Subscriptions
@@ -241,6 +257,12 @@ else
     // === Lifecycle ===
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (scrollToAlert)
+        {
+            scrollToAlert = false;
+            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+        }
+
         if (firstRender)
         {
             // Read GitHub token from OAuth cookie.
@@ -308,7 +330,16 @@ else
 
     private void SetupGitHubClient()
     {
-        gitHubClient = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")));
+        rateLimitHandler = new GitHubRateLimitHandler(LoggerFactory.CreateLogger("HTTP.GitHub.RateLimit"))
+        {
+            InnerHandler = new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")),
+        };
+        rateLimitHandler.WaitingChanged = waiting =>
+        {
+            rateLimitWaiting = waiting;
+            InvokeAsync(StateHasChanged);
+        };
+        gitHubClient = new HttpClient(rateLimitHandler);
         gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {effectiveGitHubToken}");
         gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
         gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
@@ -411,96 +442,23 @@ else
 
     private void ClearFlowPrState()
     {
-        flowPrs = null;
-        outgoingFlowPrs = null;
-        closedFlowPrs = null;
-        closedOutgoingFlowPrs = null;
-        locPrs = null;
-        closedLocPrs = null;
+        FlowsState.RepoPrCaches.Clear();
     }
 
     private async Task AutoLoadFlowPrsAsync()
     {
         if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
+            // Skip loading if PRs are already cached for this repo.
+            if (flowPrs != null)
+                return;
+
             await LoadAllFlowPrsAsync();
         }
     }
 
     // === Load Flow PRs ===
     private async Task LoadAllFlowPrsAsync()
-    {
-        await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
-    }
-
-    private async Task LoadFlowPrsAsync()
-    {
-        if (string.IsNullOrEmpty(currentRepo))
-            return;
-
-        var parts = currentRepo.Split('/');
-        if (parts.Length != 2)
-            return;
-
-        loadingPrs = true;
-        prError = null;
-        expandedRows.Clear();
-        StateHasChanged();
-
-        try
-        {
-            var openTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
-            var openLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
-            await Task.WhenAll(openTask, closedTask, openLocTask, closedLocTask);
-
-            flowPrs = openTask.Result
-                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(p => p.Number)
-                .ToList();
-            closedFlowPrs = closedTask.Result
-                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(p => p.Number)
-                .ToList();
-            locPrs = openLocTask.Result
-                .OrderByDescending(p => p.Number)
-                .ToList();
-            closedLocPrs = closedLocTask.Result
-                .OrderByDescending(p => p.Number)
-                .ToList();
-            // Load details for all PRs.
-            foreach (var pr in flowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedFlowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in locPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedLocPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to load flow PRs");
-            prError = $"Failed to load flow PRs: {ex.Message}";
-        }
-        finally
-        {
-            loadingPrs = false;
-            StateHasChanged();
-        }
-    }
-
-    // === Load Outgoing Flow PRs ===
-    private async Task LoadOutgoingFlowPrsAsync()
     {
         if (string.IsNullOrEmpty(currentRepo) || config is null)
             return;
@@ -511,77 +469,90 @@ else
 
         var targetRepos = outgoingSubscriptions
             .Select(s => s.TargetRepoShort)
+            .Where(r => !string.Equals(r, currentRepo, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (targetRepos.Count == 0)
-        {
-            outgoingFlowPrs = [];
-            return;
-        }
-
+        loadingPrs = true;
         loadingOutgoingPrs = true;
+        prError = null;
         outgoingPrError = null;
+        expandedRows.Clear();
         StateHasChanged();
 
         try
         {
-            var openTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
+            var results = await GitHubFlowService.SearchAllPrsAsync(
                 gitHubClient, parts[0], parts[1], targetRepos);
-            var closedTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
-                gitHubClient, parts[0], parts[1], targetRepos, state: "closed", perPage: 10);
-            await Task.WhenAll(openTask, closedTask);
 
-            outgoingFlowPrs = openTask.Result
+            flowPrs = results.OpenFlowPrs
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
-            closedOutgoingFlowPrs = closedTask.Result
+            closedFlowPrs = results.ClosedFlowPrs
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
-            foreach (var pr in outgoingFlowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedOutgoingFlowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
+            locPrs = results.OpenLocPrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            closedLocPrs = results.ClosedLocPrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            mergePrs = results.OpenMergePrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            closedMergePrs = results.ClosedMergePrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            outgoingFlowPrs = results.OpenOutgoingFlowPrs
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
+            closedOutgoingFlowPrs = results.ClosedOutgoingFlowPrs
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to load outgoing flow PRs");
-            outgoingPrError = $"Failed to load outgoing flow PRs: {ex.Message}";
+            Logger.LogError(ex, "Failed to load flow PRs");
+            prError = $"Failed to load flow PRs: {ex.Message}";
         }
         finally
         {
+            loadingPrs = false;
             loadingOutgoingPrs = false;
+            StateHasChanged();
+        }
+
+        await LoadDisplayedPrDetailsAsync();
+    }
+
+    /// <summary>
+    /// Loads details for all currently displayed PRs in one batched GraphQL request.
+    /// Re-checks after loading in case grouping changes reveal new PRs.
+    /// </summary>
+    private async Task LoadDisplayedPrDetailsAsync()
+    {
+        while (true)
+        {
+            var prsToLoad = unifiedRows.SelectMany(r => r.Prs)
+                .Where(p => !p.DetailsLoaded)
+                .Distinct()
+                .ToList();
+            if (prsToLoad.Count == 0) break;
+
+            await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, prsToLoad);
             StateHasChanged();
         }
     }
 
     private async Task LoadPrDetailsAsync(FlowPr pr)
     {
-        var parts = pr.Repo.Split('/');
-        if (parts.Length != 2)
-            return;
-
-        await GitHubFlowService.LoadPrDetailsAsync(gitHubClient, parts[0], parts[1], pr);
+        pr.DetailsLoaded = false;
+        await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, [pr]);
         StateHasChanged();
-    }
-
-    private async void LoadPrDetailsInBackground(FlowPr pr)
-    {
-        try
-        {
-            await LoadPrDetailsAsync(pr);
-        }
-        catch (Exception ex)
-        {
-            // Swallow — details are optional.
-            Logger.LogError(ex, "Failed to load PR details");
-        }
     }
 
     // === Actions ===
@@ -673,7 +644,7 @@ else
             // Refresh details after retry.
             if (success)
             {
-                LoadPrDetailsInBackground(pr);
+                await LoadPrDetailsAsync(pr);
             }
         }
         catch (Exception ex)
@@ -690,11 +661,37 @@ else
         }
     }
 
+    // === Lazy Annotation Loading ===
+
+    private async Task OnRowExpandedAsync(UnifiedFlowRow row)
+    {
+        var prsToLoad = row.Prs
+            .Where(p => p.DetailsLoaded && !p.AnnotationsLoaded
+                && p.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
+            .ToList();
+
+        if (prsToLoad.Count == 0)
+            return;
+
+        var tasks = prsToLoad.Select(pr =>
+            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr));
+
+        await Task.WhenAll(tasks);
+        StateHasChanged();
+    }
+
     // === UI Helpers ===
 
-    private async Task ScrollToAlert()
+    private void ToggleActionAlert()
     {
-        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+        showActionAlert = !showActionAlert;
+        scrollToAlert = showActionAlert;
+    }
+
+    private void DismissActionAlert()
+    {
+        actionMessage = null;
+        showActionAlert = false;
     }
 
     // === Favorite / Recent repos ===
@@ -752,9 +749,6 @@ else
         if (string.IsNullOrEmpty(newRepo)) return;
 
         currentRepo = newRepo;
-
-        ClearFlowPrState();
-        expandedRows.Clear();
         prError = null;
         outgoingPrError = null;
 
@@ -826,8 +820,7 @@ else
             return [];
 
         var rows = new List<UnifiedFlowRow>();
-        var matchedIncomingPrNumbers = new HashSet<int>();
-        var matchedOutgoingPrNumbers = new HashSet<int>();
+
 
         // Incoming subscriptions (other → selected repo).
         foreach (var sub in incomingSubscriptions)
@@ -837,9 +830,6 @@ else
                     && MatchesTargetBranch(pr, sub.TargetBranch))
                 .OrderByDescending(pr => pr.Number)
                 .ToList();
-            foreach (var pr in matched)
-                matchedIncomingPrNumbers.Add(pr.Number);
-
             // If no open PRs, fall back to the most recent closed PR.
             if (matched.Count == 0)
             {
@@ -872,9 +862,6 @@ else
                     && MatchesTargetBranch(pr, sub.TargetBranch))
                 .OrderByDescending(pr => pr.Number)
                 .ToList();
-            foreach (var pr in matched)
-                matchedOutgoingPrNumbers.Add(pr.Number);
-
             // If no open PRs, fall back to the most recent closed PR.
             if (matched.Count == 0)
             {
@@ -897,16 +884,31 @@ else
             });
         }
 
-        // Unmatched incoming PRs.
-        if (flowPrs != null)
+        // Inter-branch merge PRs (github-actions[bot]) — group by source→target branch pair.
         {
-            foreach (var pr in flowPrs.Where(p => !matchedIncomingPrNumbers.Contains(p.Number)))
+            var allMerge = (mergePrs ?? []).Concat(closedMergePrs ?? []).ToList();
+            var branchGroups = allMerge
+                .GroupBy(pr =>
+                {
+                    var (src, tgt) = ExtractMergeBranches(pr.Title);
+                    return $"{src ?? "?"}=>{tgt ?? pr.TargetBranch ?? "?"}";
+                }, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var group in branchGroups)
             {
+                var open = group.Where(p => p.State == "open").OrderByDescending(p => p.Number).ToList();
+                var closed = group.Where(p => p.State != "open").OrderByDescending(p => p.Number).ToList();
+                var prs = open.Count > 0 ? open : closed.Take(1).ToList();
+                var sample = prs[0];
+                var (srcBranch, _) = ExtractMergeBranches(sample.Title);
                 rows.Add(new UnifiedFlowRow
                 {
-                    OtherRepo = ExtractSourceRepoFromTitle(pr.Title) ?? "unknown",
+                    OtherRepo = currentRepo ?? "unknown",
                     IsIncoming = true,
-                    Prs = [pr],
+                    IsSameRepo = true,
+                    SourceBranch = srcBranch,
+                    Prs = prs,
                 });
             }
         }
@@ -932,44 +934,12 @@ else
             }
         }
 
-        // Unmatched outgoing PRs.
-        if (outgoingFlowPrs != null)
-        {
-            foreach (var pr in outgoingFlowPrs.Where(p => !matchedOutgoingPrNumbers.Contains(p.Number)))
-            {
-                rows.Add(new UnifiedFlowRow
-                {
-                    OtherRepo = pr.Repo,
-                    IsIncoming = false,
-                    Prs = [pr],
-                });
-            }
-        }
-
         return rows
             .OrderBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.IsIncoming ? 0 : 1)
             .ThenBy(r => r.Subscription?.Channel)
             .ThenBy(r => r.Subscription?.TargetBranch)
             .ToList();
-    }
-
-    /// <summary>
-    /// Extracts the source repo from a maestro PR title like
-    /// "[main] Update dependencies from dotnet/runtime".
-    /// </summary>
-    private static string? ExtractSourceRepoFromTitle(string title)
-    {
-        var idx = title.IndexOf("from ", StringComparison.OrdinalIgnoreCase);
-        if (idx >= 0)
-        {
-            var rest = title.AsSpan()[(idx + 5)..].Trim();
-            var end = rest.IndexOf(' ');
-            var token = end >= 0 ? rest[..end] : rest;
-            if (token.IndexOf('/') >= 0)
-                return token.ToString();
-        }
-        return null;
     }
 
     /// <summary>
@@ -1002,6 +972,34 @@ else
                 return title[1..end];
         }
         return null;
+    }
+
+    /// <summary>
+    /// Extracts source and target branches from an inter-branch merge PR title like
+    /// "[automated] Merge branch 'release/10.0.3xx' => 'main'" → ("release/10.0.3xx", "main").
+    /// </summary>
+    private static (string? Source, string? Target) ExtractMergeBranches(string title)
+    {
+        // Pattern: ... Merge branch 'source' => 'target'
+        const string prefix = "Merge branch '";
+        var start = title.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+            return (null, null);
+        start += prefix.Length;
+        var end1 = title.IndexOf('\'', start);
+        if (end1 < 0)
+            return (null, null);
+        var source = title[start..end1];
+
+        const string arrow = "=> '";
+        var arrowIdx = title.IndexOf(arrow, end1, StringComparison.Ordinal);
+        if (arrowIdx < 0)
+            return (source, null);
+        var start2 = arrowIdx + arrow.Length;
+        var end2 = title.IndexOf('\'', start2);
+        var target = end2 >= 0 ? title[start2..end2] : title[start2..];
+
+        return (source, target);
     }
 
 }

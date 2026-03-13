@@ -5,11 +5,12 @@ VS insertions dashboard for use by Roslyn and Razor teams.
 ## Development
 
 Fill the following in `secrets.json` (get its path via `dotnet user-secrets --project src/VsInsertions list --verbose`):
-- `GitHub:ClientId`
-- `GitHub:ClientSecret`
+- GitHub OAuth (optional, users can use PAT to log in instead):
+  - `GitHub:ClientId`
+  - `GitHub:ClientSecret`
 
 Open in Visual Studio and press <kbd>F5</kbd> or if you prefer command line:
 
 ```ps1
-dotnet watch -lp https --project src/VsInsertions
+$env:DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1; dotnet watch -lp https --project src/VsInsertions
 ```

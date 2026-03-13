@@ -5,6 +5,11 @@ using VsInsertions.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.TimestampFormat = "HH:mm:ss.fff ";
+});
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -83,12 +88,12 @@ app.MapGet("/signout-github", async (HttpContext ctx) =>
                     System.Text.Encoding.UTF8.GetBytes($"{gitHubClientId}:{gitHubClientSecret}"));
                 httpClient.DefaultRequestHeaders.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
-                var request = new HttpRequestMessage(HttpMethod.Delete,
+                using var request = new HttpRequestMessage(HttpMethod.Delete,
                     $"https://api.github.com/applications/{Uri.EscapeDataString(gitHubClientId)}/grant")
                 {
                     Content = JsonContent.Create(new { access_token = token }),
                 };
-                await httpClient.SendAsync(request);
+                using var response = await httpClient.SendAsync(request);
             }
             catch
             {
