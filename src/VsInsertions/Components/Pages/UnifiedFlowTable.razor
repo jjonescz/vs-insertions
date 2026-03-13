@@ -415,8 +415,9 @@ else
     };
 
     private static bool IsCircular(UnifiedFlowRow row) =>
-        row.Subscription != null &&
-        string.Equals(row.Subscription.SourceRepoShort, row.Subscription.TargetRepoShort, StringComparison.OrdinalIgnoreCase);
+        row.IsSameRepo ||
+        (row.Subscription != null &&
+        string.Equals(row.Subscription.SourceRepoShort, row.Subscription.TargetRepoShort, StringComparison.OrdinalIgnoreCase));
 
     private static string CheckConclusionToEmoji(string? conclusion, string status) => (conclusion, status) switch
     {

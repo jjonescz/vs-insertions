@@ -8,6 +8,9 @@ public sealed class UnifiedFlowRow
     public string? SourceBranch { get; init; }
     public List<FlowPr> Prs { get; init; } = [];
 
+    /// <summary>Whether this row represents a same-repo branch flow (no subscription).</summary>
+    public bool IsSameRepo { get; init; }
+
     /// <summary>Stable key for expand/collapse state.</summary>
     public string RowKey => Subscription?.Id ?? $"{OtherRepo}|{IsIncoming}|{Subscription?.Channel}|{Subscription?.TargetBranch}|{Prs.FirstOrDefault()?.TargetBranch}";
 }

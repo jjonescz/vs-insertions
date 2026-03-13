@@ -212,6 +212,8 @@ else
     private List<FlowPr>? closedOutgoingFlowPrs { get => FlowsState.ClosedOutgoingFlowPrs; set => FlowsState.ClosedOutgoingFlowPrs = value; }
     private List<FlowPr>? locPrs { get => FlowsState.LocPrs; set => FlowsState.LocPrs = value; }
     private List<FlowPr>? closedLocPrs { get => FlowsState.ClosedLocPrs; set => FlowsState.ClosedLocPrs = value; }
+    private List<FlowPr>? mergePrs { get => FlowsState.MergePrs; set => FlowsState.MergePrs = value; }
+    private List<FlowPr>? closedMergePrs { get => FlowsState.ClosedMergePrs; set => FlowsState.ClosedMergePrs = value; }
     private bool loadingPrs;
     private bool loadingOutgoingPrs;
     private string? prError;
@@ -429,6 +431,8 @@ else
         closedOutgoingFlowPrs = null;
         locPrs = null;
         closedLocPrs = null;
+        mergePrs = null;
+        closedMergePrs = null;
     }
 
     private async Task AutoLoadFlowPrsAsync()
@@ -465,7 +469,9 @@ else
             var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
             var openLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1]);
             var closedLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
-            await Task.WhenAll(openTask, closedTask, openLocTask, closedLocTask);
+            var openMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1]);
+            var closedMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
+            await Task.WhenAll(openTask, closedTask, openLocTask, closedLocTask, openMergeTask, closedMergeTask);
 
             flowPrs = openTask.Result
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
@@ -479,6 +485,12 @@ else
                 .OrderByDescending(p => p.Number)
                 .ToList();
             closedLocPrs = closedLocTask.Result
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            mergePrs = openMergeTask.Result
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            closedMergePrs = closedMergeTask.Result
                 .OrderByDescending(p => p.Number)
                 .ToList();
             // Load details for all PRs.
@@ -495,6 +507,14 @@ else
                 LoadPrDetailsInBackground(pr);
             }
             foreach (var pr in closedLocPrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+            foreach (var pr in mergePrs)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+            foreach (var pr in closedMergePrs)
             {
                 LoadPrDetailsInBackground(pr);
             }
@@ -523,6 +543,7 @@ else
 
         var targetRepos = outgoingSubscriptions
             .Select(s => s.TargetRepoShort)
+            .Where(r => !string.Equals(r, currentRepo, StringComparison.OrdinalIgnoreCase)) // Same-repo PRs are loaded by GetFlowPrsAsync.
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -916,6 +937,35 @@ else
             });
         }
 
+        // Inter-branch merge PRs (github-actions[bot]) — group by source→target branch pair.
+        {
+            var allMerge = (mergePrs ?? []).Concat(closedMergePrs ?? []).ToList();
+            var branchGroups = allMerge
+                .GroupBy(pr =>
+                {
+                    var (src, tgt) = ExtractMergeBranches(pr.Title);
+                    return $"{src ?? "?"}=>{tgt ?? pr.TargetBranch ?? "?"}";
+                }, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var group in branchGroups)
+            {
+                var open = group.Where(p => p.State == "open").OrderByDescending(p => p.Number).ToList();
+                var closed = group.Where(p => p.State != "open").OrderByDescending(p => p.Number).ToList();
+                var prs = open.Count > 0 ? open : closed.Take(1).ToList();
+                var sample = prs[0];
+                var (srcBranch, _) = ExtractMergeBranches(sample.Title);
+                rows.Add(new UnifiedFlowRow
+                {
+                    OtherRepo = currentRepo ?? "unknown",
+                    IsIncoming = true,
+                    IsSameRepo = true,
+                    SourceBranch = srcBranch,
+                    Prs = prs,
+                });
+            }
+        }
+
         // Unmatched incoming PRs.
         if (flowPrs != null)
         {
@@ -1021,6 +1071,34 @@ else
                 return title[1..end];
         }
         return null;
+    }
+
+    /// <summary>
+    /// Extracts source and target branches from an inter-branch merge PR title like
+    /// "[automated] Merge branch 'release/10.0.3xx' => 'main'" → ("release/10.0.3xx", "main").
+    /// </summary>
+    private static (string? Source, string? Target) ExtractMergeBranches(string title)
+    {
+        // Pattern: ... Merge branch 'source' => 'target'
+        const string prefix = "Merge branch '";
+        var start = title.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+            return (null, null);
+        start += prefix.Length;
+        var end1 = title.IndexOf('\'', start);
+        if (end1 < 0)
+            return (null, null);
+        var source = title[start..end1];
+
+        const string arrow = "=> '";
+        var arrowIdx = title.IndexOf(arrow, end1, StringComparison.Ordinal);
+        if (arrowIdx < 0)
+            return (source, null);
+        var start2 = arrowIdx + arrow.Length;
+        var end2 = title.IndexOf('\'', start2);
+        var target = end2 >= 0 ? title[start2..end2] : title[start2..];
+
+        return (source, target);
     }
 
 }

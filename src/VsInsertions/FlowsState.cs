@@ -16,5 +16,7 @@ public sealed class FlowsState
     public List<FlowPr>? ClosedOutgoingFlowPrs { get; set; }
     public List<FlowPr>? LocPrs { get; set; }
     public List<FlowPr>? ClosedLocPrs { get; set; }
+    public List<FlowPr>? MergePrs { get; set; }
+    public List<FlowPr>? ClosedMergePrs { get; set; }
     public HashSet<string> ExpandedRows { get; set; } = [];
 }
