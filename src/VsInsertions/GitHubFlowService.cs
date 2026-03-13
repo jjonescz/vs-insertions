@@ -92,7 +92,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             headRefOid headRefName baseRefName merged mergeable
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
-                ... on CheckRun { databaseId name status conclusion detailsUrl permalink }
+                ... on CheckRun { databaseId name status conclusion detailsUrl title }
             } } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
@@ -264,7 +264,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 Name = c["name"]?.ToString() ?? "",
                 Status = c["status"]?.ToString()?.ToLowerInvariant() ?? "",
                 Conclusion = c["conclusion"]?.ToString()?.ToLowerInvariant(),
-                Url = c["permalink"]?.ToString() ?? c["detailsUrl"]?.ToString(),
+                Url = c["detailsUrl"]?.ToString(),
+                Title = c["title"]?.ToString(),
             })
             .ToList() ?? [];
 
@@ -284,6 +285,69 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
     private static bool IsValidGraphQLIdentifier(string value)
         => Regex.IsMatch(value, @"^[a-zA-Z0-9_.\-]+$");
+
+    /// <summary>
+    /// Loads annotations for failing check runs of a single PR via GraphQL.
+    /// </summary>
+    public async Task LoadCheckAnnotationsAsync(HttpClient client, string owner, string repo, FlowPr pr)
+    {
+        if (pr.AnnotationsLoaded || pr.CheckRuns is null)
+            return;
+
+        var failedChecks = pr.CheckRuns
+            .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out")
+            .ToList();
+
+        if (failedChecks.Count == 0)
+        {
+            pr.AnnotationsLoaded = true;
+            return;
+        }
+
+        try
+        {
+            await LoadCheckAnnotationsViaRestAsync(client, owner, repo, failedChecks);
+            pr.AnnotationsLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load check annotations for PR #{Number}", pr.Number);
+            pr.AnnotationsLoaded = true;
+        }
+    }
+
+    private async Task LoadCheckAnnotationsViaRestAsync(
+        HttpClient client, string owner, string repo, List<CheckRunInfo> checkRuns)
+    {
+        var tasks = checkRuns.Select(async check =>
+        {
+            try
+            {
+                var url = $"{GitHubApiBase}/repos/{owner}/{repo}/check-runs/{check.Id}/annotations?per_page=50";
+                var json = await client.GetStringAsync(url);
+                var array = JsonNode.Parse(json)?.AsArray();
+                if (array is not null)
+                {
+                    check.Annotations = array
+                        .Where(a => a is not null)
+                        .Select(a => new CheckAnnotation
+                        {
+                            Path = a!["path"]?.ToString() ?? "",
+                            Line = a["start_line"]?.GetValue<int>(),
+                            Level = a["annotation_level"]?.ToString()?.ToLowerInvariant() ?? "",
+                            Message = Truncate(a["message"]?.ToString() ?? "", 500),
+                        })
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to load annotations for check run {Id}", check.Id);
+            }
+        });
+
+        await Task.WhenAll(tasks);
+    }
 
     /// <summary>
     /// Loads details (reviews, check runs, comments) for a single PR.
@@ -366,6 +430,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 Status = c["status"]?.ToString() ?? "",
                 Conclusion = c["conclusion"]?.ToString(),
                 Url = c["html_url"]?.ToString() ?? c["details_url"]?.ToString(),
+                Title = c["output"]?["title"]?.ToString(),
             }));
 
             if (array.Count < 100) break;
@@ -709,6 +774,7 @@ public sealed class FlowPr
     public List<PrReview>? Reviews { get; set; }
     public List<CheckRunInfo>? CheckRuns { get; set; }
     public List<PrComment>? Comments { get; set; }
+    public bool AnnotationsLoaded { get; set; }
 
     /// <summary>
     /// Whether the PR still needs approval (no non-bot user has approved, or changes were requested after last approval).
@@ -762,6 +828,16 @@ public sealed class CheckRunInfo
     public string Status { get; set; } = ""; // queued, in_progress, completed
     public string? Conclusion { get; set; } // success, failure, cancelled, timed_out, etc.
     public string? Url { get; set; }
+    public string? Title { get; set; } // output title (e.g., "1 test(s) failed")
+    public List<CheckAnnotation> Annotations { get; set; } = [];
+}
+
+public sealed class CheckAnnotation
+{
+    public string Path { get; set; } = "";
+    public int? Line { get; set; }
+    public string Level { get; set; } = ""; // failure, warning, notice
+    public string Message { get; set; } = "";
 }
 
 public sealed class PrComment

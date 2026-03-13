@@ -179,7 +179,8 @@ else
                       ActionType="@actionType"
                       OnApprove="ApproveAsync"
                       OnMerge="MergeAsync"
-                      OnRetryCi="RetryCiAsync" />
+                      OnRetryCi="RetryCiAsync"
+                      OnRowExpanded="OnRowExpandedAsync" />
 }
 
 
@@ -661,6 +662,31 @@ else
             actionType = null;
             StateHasChanged();
         }
+    }
+
+    // === Lazy Annotation Loading ===
+
+    private async Task OnRowExpandedAsync(UnifiedFlowRow row)
+    {
+        var prsToLoad = row.Prs
+            .Where(p => p.DetailsLoaded && !p.AnnotationsLoaded
+                && p.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
+            .ToList();
+
+        if (prsToLoad.Count == 0)
+            return;
+
+        var tasks = prsToLoad.Select(async pr =>
+        {
+            var parts = pr.Repo.Split('/');
+            if (parts.Length == 2)
+            {
+                await GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, parts[0], parts[1], pr);
+            }
+        });
+
+        await Task.WhenAll(tasks);
+        StateHasChanged();
     }
 
     // === UI Helpers ===

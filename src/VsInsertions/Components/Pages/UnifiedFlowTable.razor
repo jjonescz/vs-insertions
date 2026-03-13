@@ -129,7 +129,7 @@ else
                                 </td>
 
                                 @* CI *@
-                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
+                                <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@CiTooltip(primaryPr)">
                                     @if (!primaryPr.DetailsLoaded)
                                     {
                                         <span title="Loading details…">⏳</span>
@@ -332,6 +332,24 @@ else
                                                             }
                                                             @(" ")
                                                             <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                            @if (!string.IsNullOrEmpty(check.Title))
+                                                            {
+                                                                <small class="text-muted"> — @check.Title</small>
+                                                            }
+                                                            @if (check.Annotations is { Count: > 0 })
+                                                            {
+                                                                <ul class="mb-1 ms-3" style="list-style: none; padding-left: 0;">
+                                                                    @foreach (var ann in check.Annotations)
+                                                                    {
+                                                                        <li>
+                                                                            <small class="@(ann.Level == "failure" ? "text-danger" : "text-warning")">
+                                                                                <code>@ann.Path@(ann.Line.HasValue ? $"#L{ann.Line}" : "")</code>:
+                                                                                @ann.Message
+                                                                            </small>
+                                                                        </li>
+                                                                    }
+                                                                </ul>
+                                                            }
                                                         </li>
                                                     }
                                                 </ul>
@@ -401,11 +419,15 @@ else
     [Parameter] public EventCallback<FlowPr> OnApprove { get; set; }
     [Parameter] public EventCallback<FlowPr> OnMerge { get; set; }
     [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
+    [Parameter] public EventCallback<UnifiedFlowRow> OnRowExpanded { get; set; }
 
-    private void ToggleRow(UnifiedFlowRow row)
+    private async Task ToggleRow(UnifiedFlowRow row)
     {
         if (!ExpandedRows.Remove(row.RowKey))
+        {
             ExpandedRows.Add(row.RowKey);
+            await OnRowExpanded.InvokeAsync(row);
+        }
     }
 
     private static string ChannelTooltip(FlowPr? pr, UnifiedFlowRow row)
@@ -498,4 +520,24 @@ else
         (null, "in_progress") => "🔄",
         _ => "—",
     };
+
+    private static string CiTooltip(FlowPr pr)
+    {
+        if (pr.CheckRuns is not { Count: > 0 })
+            return "Click to expand/collapse details";
+
+        var failed = pr.CheckRuns
+            .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out")
+            .ToList();
+        if (failed.Count == 0)
+            return "Click to expand/collapse details";
+
+        return string.Join("\n", failed.Select(c =>
+        {
+            var line = $"✘ {c.Name}";
+            if (!string.IsNullOrEmpty(c.Title))
+                line += $" — {c.Title}";
+            return line;
+        }));
+    }
 }
