@@ -470,11 +470,11 @@ else
         try
         {
             var openTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
+            var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 30);
             var openLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
+            var closedLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 30);
             var openMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 10);
+            var closedMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 30);
             await Task.WhenAll(openTask, closedTask, openLocTask, closedLocTask, openMergeTask, closedMergeTask);
 
             flowPrs = openTask.Result
@@ -566,7 +566,7 @@ else
             var openTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
                 gitHubClient, parts[0], parts[1], targetRepos);
             var closedTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
-                gitHubClient, parts[0], parts[1], targetRepos, state: "closed", perPage: 10);
+                gitHubClient, parts[0], parts[1], targetRepos, state: "closed", perPage: 30);
             await Task.WhenAll(openTask, closedTask);
 
             outgoingFlowPrs = openTask.Result
