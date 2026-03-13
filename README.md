@@ -12,5 +12,5 @@ Fill the following in `secrets.json` (get its path via `dotnet user-secrets --pr
 Open in Visual Studio and press <kbd>F5</kbd> or if you prefer command line:
 
 ```ps1
-dotnet watch -lp https --project src/VsInsertions
+$env:DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1; dotnet watch -lp https --project src/VsInsertions
 ```
