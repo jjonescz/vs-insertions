@@ -393,6 +393,7 @@ else
 
     private static string PrStateEmoji(FlowPr pr) => pr switch
     {
+        { DetailsLoaded: false } => "⏳",
         { Merged: true } => "🟣",
         { State: "closed" } => "🔴",
         _ => "🟢",
@@ -400,6 +401,7 @@ else
 
     private static string PrStateTooltip(FlowPr pr) => pr switch
     {
+        { DetailsLoaded: false } => "Loading…",
         { Merged: true } => "Merged",
         { State: "closed" } => "Closed",
         _ => "Open",
