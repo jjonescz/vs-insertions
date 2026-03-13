@@ -5,6 +5,11 @@ using VsInsertions.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.TimestampFormat = "HH:mm:ss.fff ";
+});
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

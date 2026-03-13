@@ -171,6 +171,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             requestObj["variables"] = varsObj;
         }
 
+        var summary = SummarizeGraphQLQuery(query, variables);
+        logger.LogInformation("GraphQL: {Summary}", summary);
+
         var response = await client.PostAsync(GraphQLUrl,
             new StringContent(requestObj.ToJsonString(), System.Text.Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
@@ -181,6 +184,36 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             logger.LogWarning("GraphQL errors: {Errors}", errors.ToJsonString());
 
         return result?["data"];
+    }
+
+    /// <summary>
+    /// Extracts a short human-readable summary from a GraphQL query
+    /// by listing its top-level aliases/fields.
+    /// </summary>
+    private static string SummarizeGraphQLQuery(string query, Dictionary<string, string>? variables)
+    {
+        // Extract top-level alias names (e.g., "flowPrs", "locPrs", "repo_0").
+        var aliases = new List<string>();
+        foreach (Match m in Regex.Matches(query, @"(?<=\{\s*|\}\s+)(\w+)\s*(?::.*?)?(?:search|repository|pullRequest)\s*\("))
+            aliases.Add(m.Groups[1].Value);
+
+        var parts = new List<string>();
+        if (aliases.Count > 0)
+            parts.Add(string.Join(", ", aliases));
+        else
+            parts.Add(query.Length > 80 ? string.Concat(query.AsSpan(0, 80), "...") : query);
+
+        // Show variable values that contain repo info (search queries).
+        if (variables is { Count: > 0 })
+        {
+            var repoVars = variables.Values
+                .Where(v => v.Contains("repo:", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (repoVars.Count > 0)
+                parts.Add($"[{string.Join("; ", repoVars)}]");
+        }
+
+        return string.Join(" ", parts);
     }
 
     private static void SplitSearchByState(
@@ -324,11 +357,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             }
 
             var query = $"{{ {string.Join(" ", parts)} }}";
-            var payload = JsonSerializer.Serialize(new { query });
-            var response = await client.PostAsync(GraphQLUrl,
-                new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
-            var json = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(json)?["data"];
+            var root = await ExecuteGraphQLAsync(client, query);
 
             if (root is not null)
             {
