@@ -174,7 +174,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         var summary = SummarizeGraphQLQuery(query, variables);
         logger.LogInformation("GraphQL: {Summary}", summary);
 
-        var response = await client.PostAsync(GraphQLUrl,
+        using var response = await client.PostAsync(GraphQLUrl,
             new StringContent(requestObj.ToJsonString(), System.Text.Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
@@ -433,7 +433,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     {
         var approveUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/pulls/{pr.Number}/reviews";
         var approvePayload = JsonSerializer.Serialize(new { @event = "APPROVE" });
-        var approveResponse = await client.PostAsync(approveUrl,
+        using var approveResponse = await client.PostAsync(approveUrl,
             new StringContent(approvePayload, System.Text.Encoding.UTF8, "application/json"));
         if (!approveResponse.IsSuccessStatusCode)
         {
@@ -455,7 +455,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     {
         var mergeUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/pulls/{pr.Number}/merge";
         var mergePayload = JsonSerializer.Serialize(new { merge_method = "squash" });
-        var mergeResponse = await client.PutAsync(mergeUrl,
+        using var mergeResponse = await client.PutAsync(mergeUrl,
             new StringContent(mergePayload, System.Text.Encoding.UTF8, "application/json"));
         if (!mergeResponse.IsSuccessStatusCode)
         {
@@ -467,7 +467,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         if (!string.IsNullOrEmpty(pr.SourceBranch))
         {
             var deleteUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/git/refs/heads/{pr.SourceBranch}";
-            var deleteResponse = await client.DeleteAsync(deleteUrl);
+            using var deleteResponse = await client.DeleteAsync(deleteUrl);
             if (!deleteResponse.IsSuccessStatusCode)
                 logger.LogWarning("Failed to delete branch {Branch}: {Status}", pr.SourceBranch, deleteResponse.StatusCode);
         }
@@ -531,7 +531,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                     try
                     {
                         var rerunUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/actions/runs/{runId}/rerun-failed-jobs";
-                        var response = await client.PostAsync(rerunUrl, null);
+                        using var response = await client.PostAsync(rerunUrl, null);
                         if (response.IsSuccessStatusCode)
                         {
                             retriedCount++;
@@ -584,7 +584,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                         var (org, project, buildId) = buildInfo.Value;
                         var retryUrl = $"https://dev.azure.com/{org}/{project}/_apis/build/builds/{buildId}?retry=true&api-version=7.1";
                         using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
-                        var response = await adoClient.PatchAsync(retryUrl, content);
+                        using var response = await adoClient.PatchAsync(retryUrl, content);
                         if (response.IsSuccessStatusCode)
                         {
                             retriedCount++;
@@ -624,7 +624,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             try
             {
                 var rerequestUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/check-suites/{suiteId}/rerequest";
-                var response = await client.PostAsync(rerequestUrl, null);
+                using var response = await client.PostAsync(rerequestUrl, null);
                 if (response.IsSuccessStatusCode)
                 {
                     retriedCount++;
