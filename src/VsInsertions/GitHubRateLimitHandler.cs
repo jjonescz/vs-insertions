@@ -28,6 +28,20 @@ public sealed class GitHubRateLimitHandler(ILogger logger) : DelegatingHandler
     // all requests should wait until this time before sending.
     private long _secondaryResetTicks;
 
+    // Number of requests currently waiting due to rate limiting.
+    private int _waitingCount;
+
+    /// <summary>
+    /// Whether any request is currently waiting due to rate limiting.
+    /// </summary>
+    public bool IsWaiting => Volatile.Read(ref _waitingCount) > 0;
+
+    /// <summary>
+    /// Raised when <see cref="IsWaiting"/> changes. The argument is the new value.
+    /// Invoked on a thread-pool thread, so the subscriber must marshal to the UI thread.
+    /// </summary>
+    public Action<bool>? WaitingChanged { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -105,10 +119,24 @@ public sealed class GitHubRateLimitHandler(ILogger logger) : DelegatingHandler
             logger.LogWarning(
                 "GitHub rate limit response ({StatusCode}). Retry {Attempt}/{Max} after {Delay:F1}s.",
                 (int)response.StatusCode, attempt + 1, MaxRetries, delay.TotalSeconds);
-            await Task.Delay(delay, cancellationToken);
+            EnterWaiting();
+            try { await Task.Delay(delay, cancellationToken); }
+            finally { LeaveWaiting(); }
         }
 
         return response!;
+    }
+
+    private void EnterWaiting()
+    {
+        if (Interlocked.Increment(ref _waitingCount) == 1)
+            WaitingChanged?.Invoke(true);
+    }
+
+    private void LeaveWaiting()
+    {
+        if (Interlocked.Decrement(ref _waitingCount) == 0)
+            WaitingChanged?.Invoke(false);
     }
 
     private async Task WaitForPrimaryResetAsync(bool isSearch, CancellationToken cancellationToken)
@@ -123,7 +151,9 @@ public sealed class GitHubRateLimitHandler(ILogger logger) : DelegatingHandler
                 logger.LogWarning(
                     "GitHub {Category} rate limit exhausted. Waiting {Delay:F0}s for reset.",
                     isSearch ? "search" : "core", delay.TotalSeconds);
-                await Task.Delay(delay, cancellationToken);
+                EnterWaiting();
+                try { await Task.Delay(delay, cancellationToken); }
+                finally { LeaveWaiting(); }
             }
         }
     }
@@ -140,7 +170,9 @@ public sealed class GitHubRateLimitHandler(ILogger logger) : DelegatingHandler
                 logger.LogWarning(
                     "GitHub secondary rate limit active. Waiting {Delay:F0}s.",
                     delay.TotalSeconds);
-                await Task.Delay(delay, cancellationToken);
+                EnterWaiting();
+                try { await Task.Delay(delay, cancellationToken); }
+                finally { LeaveWaiting(); }
             }
         }
     }

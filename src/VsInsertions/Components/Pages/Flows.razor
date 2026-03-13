@@ -70,6 +70,10 @@
                 @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
             </button>
         }
+        @if (rateLimitWaiting)
+        {
+            <span class="badge bg-warning text-dark" title="Waiting for GitHub rate limit reset">⏳ Rate limited</span>
+        }
     </text>;
 }
 
@@ -194,6 +198,8 @@ else
     private string? gitHubPatInput;
     private HttpClient adoClient = new();
     private HttpClient gitHubClient = new();
+    private GitHubRateLimitHandler? rateLimitHandler;
+    private bool rateLimitWaiting;
 
     /// <summary>Effective GitHub token: OAuth takes priority, PAT is fallback.</summary>
     private string? effectiveGitHubToken => gitHubToken ?? gitHubPatToken;
@@ -322,9 +328,14 @@ else
 
     private void SetupGitHubClient()
     {
-        var rateLimitHandler = new GitHubRateLimitHandler(LoggerFactory.CreateLogger("HTTP.GitHub.RateLimit"))
+        rateLimitHandler = new GitHubRateLimitHandler(LoggerFactory.CreateLogger("HTTP.GitHub.RateLimit"))
         {
             InnerHandler = new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.GitHub")),
+        };
+        rateLimitHandler.WaitingChanged = waiting =>
+        {
+            rateLimitWaiting = waiting;
+            InvokeAsync(StateHasChanged);
         };
         gitHubClient = new HttpClient(rateLimitHandler);
         gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {effectiveGitHubToken}");
