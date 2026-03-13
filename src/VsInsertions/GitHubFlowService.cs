@@ -92,7 +92,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             headRefOid headRefName baseRefName merged mergeable
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
-                ... on CheckRun { databaseId name status conclusion detailsUrl title }
+                ... on CheckRun { id databaseId name status conclusion detailsUrl title }
             } } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
@@ -261,6 +261,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             .Select(c => new CheckRunInfo
             {
                 Id = c!["databaseId"]!.GetValue<long>(),
+                NodeId = c["id"]?.ToString() ?? "",
                 Name = c["name"]?.ToString() ?? "",
                 Status = c["status"]?.ToString()?.ToLowerInvariant() ?? "",
                 Conclusion = c["conclusion"]?.ToString()?.ToLowerInvariant(),
@@ -289,13 +290,14 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     /// <summary>
     /// Loads annotations for failing check runs of a single PR via GraphQL.
     /// </summary>
-    public async Task LoadCheckAnnotationsAsync(HttpClient client, string owner, string repo, FlowPr pr)
+    public async Task LoadCheckAnnotationsAsync(HttpClient client, FlowPr pr)
     {
         if (pr.AnnotationsLoaded || pr.CheckRuns is null)
             return;
 
         var failedChecks = pr.CheckRuns
-            .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out")
+            .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out"
+                && !string.IsNullOrEmpty(c.NodeId))
             .ToList();
 
         if (failedChecks.Count == 0)
@@ -306,7 +308,49 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
         try
         {
-            await LoadCheckAnnotationsViaRestAsync(client, owner, repo, failedChecks);
+            // Build a single GraphQL query fetching annotations for all failed check runs.
+            var parts = new List<string>();
+            for (int i = 0; i < failedChecks.Count; i++)
+            {
+                var nodeId = failedChecks[i].NodeId;
+                if (!IsValidBase64Id(nodeId)) continue;
+                parts.Add($"check_{i}: node(id: \"{nodeId}\") {{ ... on CheckRun {{ annotations(first: 10) {{ nodes {{ path location {{ start {{ line }} }} annotationLevel message }} }} }} }}");
+            }
+
+            if (parts.Count == 0)
+            {
+                pr.AnnotationsLoaded = true;
+                return;
+            }
+
+            var query = $"{{ {string.Join(" ", parts)} }}";
+            var payload = JsonSerializer.Serialize(new { query });
+            var response = await client.PostAsync(GraphQLUrl,
+                new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+            var json = await response.Content.ReadAsStringAsync();
+            var root = JsonNode.Parse(json)?["data"];
+
+            if (root is not null)
+            {
+                for (int i = 0; i < failedChecks.Count; i++)
+                {
+                    var annNodes = root[$"check_{i}"]?["annotations"]?["nodes"]?.AsArray();
+                    if (annNodes is not null)
+                    {
+                        failedChecks[i].Annotations = annNodes
+                            .Where(a => a is not null)
+                            .Select(a => new CheckAnnotation
+                            {
+                                Path = a!["path"]?.ToString() ?? "",
+                                Line = a["location"]?["start"]?["line"]?.GetValue<int>(),
+                                Level = a["annotationLevel"]?.ToString()?.ToLowerInvariant() ?? "",
+                                Message = Truncate(a["message"]?.ToString() ?? "", 500),
+                            })
+                            .ToList();
+                    }
+                }
+            }
+
             pr.AnnotationsLoaded = true;
         }
         catch (Exception ex)
@@ -316,38 +360,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         }
     }
 
-    private async Task LoadCheckAnnotationsViaRestAsync(
-        HttpClient client, string owner, string repo, List<CheckRunInfo> checkRuns)
-    {
-        var tasks = checkRuns.Select(async check =>
-        {
-            try
-            {
-                var url = $"{GitHubApiBase}/repos/{owner}/{repo}/check-runs/{check.Id}/annotations?per_page=50";
-                var json = await client.GetStringAsync(url);
-                var array = JsonNode.Parse(json)?.AsArray();
-                if (array is not null)
-                {
-                    check.Annotations = array
-                        .Where(a => a is not null)
-                        .Select(a => new CheckAnnotation
-                        {
-                            Path = a!["path"]?.ToString() ?? "",
-                            Line = a["start_line"]?.GetValue<int>(),
-                            Level = a["annotation_level"]?.ToString()?.ToLowerInvariant() ?? "",
-                            Message = Truncate(a["message"]?.ToString() ?? "", 500),
-                        })
-                        .ToList();
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load annotations for check run {Id}", check.Id);
-            }
-        });
-
-        await Task.WhenAll(tasks);
-    }
+    private static bool IsValidBase64Id(string value)
+        => Regex.IsMatch(value, @"^[a-zA-Z0-9+/=_\-]+$");
 
     /// <summary>
     /// Loads details (reviews, check runs, comments) for a single PR.
@@ -824,6 +838,7 @@ public sealed class PrReview
 public sealed class CheckRunInfo
 {
     public long Id { get; set; }
+    public string NodeId { get; set; } = ""; // GraphQL global node ID
     public string Name { get; set; } = "";
     public string Status { get; set; } = ""; // queued, in_progress, completed
     public string? Conclusion { get; set; } // success, failure, cancelled, timed_out, etc.

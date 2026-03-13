@@ -676,14 +676,8 @@ else
         if (prsToLoad.Count == 0)
             return;
 
-        var tasks = prsToLoad.Select(async pr =>
-        {
-            var parts = pr.Repo.Split('/');
-            if (parts.Length == 2)
-            {
-                await GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, parts[0], parts[1], pr);
-            }
-        });
+        var tasks = prsToLoad.Select(pr =>
+            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr));
 
         await Task.WhenAll(tasks);
         StateHasChanged();
