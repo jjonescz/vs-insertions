@@ -211,20 +211,21 @@ else
     private bool loadingSubscriptions;
     private string? subscriptionError;
 
-    // Flow PRs state (preserved across navigations via FlowsState).
-    private List<FlowPr>? flowPrs { get => FlowsState.FlowPrs; set => FlowsState.FlowPrs = value; }
-    private List<FlowPr>? outgoingFlowPrs { get => FlowsState.OutgoingFlowPrs; set => FlowsState.OutgoingFlowPrs = value; }
-    private List<FlowPr>? closedFlowPrs { get => FlowsState.ClosedFlowPrs; set => FlowsState.ClosedFlowPrs = value; }
-    private List<FlowPr>? closedOutgoingFlowPrs { get => FlowsState.ClosedOutgoingFlowPrs; set => FlowsState.ClosedOutgoingFlowPrs = value; }
-    private List<FlowPr>? locPrs { get => FlowsState.LocPrs; set => FlowsState.LocPrs = value; }
-    private List<FlowPr>? closedLocPrs { get => FlowsState.ClosedLocPrs; set => FlowsState.ClosedLocPrs = value; }
-    private List<FlowPr>? mergePrs { get => FlowsState.MergePrs; set => FlowsState.MergePrs = value; }
-    private List<FlowPr>? closedMergePrs { get => FlowsState.ClosedMergePrs; set => FlowsState.ClosedMergePrs = value; }
+    // Flow PRs state (preserved across navigations via FlowsState, cached per repo).
+    private RepoPrCache currentPrCache => FlowsState.GetOrCreatePrCache(currentRepo ?? "");
+    private List<FlowPr>? flowPrs { get => currentPrCache.FlowPrs; set => currentPrCache.FlowPrs = value; }
+    private List<FlowPr>? outgoingFlowPrs { get => currentPrCache.OutgoingFlowPrs; set => currentPrCache.OutgoingFlowPrs = value; }
+    private List<FlowPr>? closedFlowPrs { get => currentPrCache.ClosedFlowPrs; set => currentPrCache.ClosedFlowPrs = value; }
+    private List<FlowPr>? closedOutgoingFlowPrs { get => currentPrCache.ClosedOutgoingFlowPrs; set => currentPrCache.ClosedOutgoingFlowPrs = value; }
+    private List<FlowPr>? locPrs { get => currentPrCache.LocPrs; set => currentPrCache.LocPrs = value; }
+    private List<FlowPr>? closedLocPrs { get => currentPrCache.ClosedLocPrs; set => currentPrCache.ClosedLocPrs = value; }
+    private List<FlowPr>? mergePrs { get => currentPrCache.MergePrs; set => currentPrCache.MergePrs = value; }
+    private List<FlowPr>? closedMergePrs { get => currentPrCache.ClosedMergePrs; set => currentPrCache.ClosedMergePrs = value; }
     private bool loadingPrs;
     private bool loadingOutgoingPrs;
     private string? prError;
     private string? outgoingPrError;
-    private HashSet<string> expandedRows => FlowsState.ExpandedRows;
+    private HashSet<string> expandedRows => currentPrCache.ExpandedRows;
 
     // Action state.
     private FlowPr? actionInProgressPr;
@@ -440,20 +441,17 @@ else
 
     private void ClearFlowPrState()
     {
-        flowPrs = null;
-        outgoingFlowPrs = null;
-        closedFlowPrs = null;
-        closedOutgoingFlowPrs = null;
-        locPrs = null;
-        closedLocPrs = null;
-        mergePrs = null;
-        closedMergePrs = null;
+        FlowsState.RepoPrCaches.Clear();
     }
 
     private async Task AutoLoadFlowPrsAsync()
     {
         if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
         {
+            // Skip loading if PRs are already cached for this repo.
+            if (flowPrs != null)
+                return;
+
             await LoadAllFlowPrsAsync();
         }
     }
@@ -807,9 +805,6 @@ else
         if (string.IsNullOrEmpty(newRepo)) return;
 
         currentRepo = newRepo;
-
-        ClearFlowPrState();
-        expandedRows.Clear();
         prError = null;
         outgoingPrError = null;
 
