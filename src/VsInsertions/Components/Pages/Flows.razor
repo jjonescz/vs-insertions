@@ -550,11 +550,8 @@ else
 
     private async Task LoadPrDetailsAsync(FlowPr pr)
     {
-        var parts = pr.Repo.Split('/');
-        if (parts.Length != 2)
-            return;
-
-        await GitHubFlowService.LoadPrDetailsAsync(gitHubClient, parts[0], parts[1], pr);
+        pr.DetailsLoaded = false;
+        await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, [pr]);
         StateHasChanged();
     }
 

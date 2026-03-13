@@ -392,67 +392,6 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     private static bool IsValidBase64Id(string value)
         => Regex.IsMatch(value, @"^[a-zA-Z0-9+/=_\-]+$");
 
-    /// <summary>
-    /// Loads details (reviews, check runs, comments) for a single PR.
-    /// </summary>
-    public async Task LoadPrDetailsAsync(
-        HttpClient client,
-        string owner,
-        string repo,
-        FlowPr pr)
-    {
-        try
-        {
-            // Get PR details (for head SHA and branch info).
-            var prUrl = $"{GitHubApiBase}/repos/{owner}/{repo}/pulls/{pr.Number}";
-            var prJson = await client.GetStringAsync(prUrl);
-            var prNode = JsonNode.Parse(prJson);
-            pr.HeadSha = prNode?["head"]?["sha"]?.ToString();
-            pr.SourceBranch = prNode?["head"]?["ref"]?.ToString();
-            pr.TargetBranch = prNode?["base"]?["ref"]?.ToString();
-            pr.Merged = prNode?["merged"]?.GetValue<bool>() ?? false;
-            pr.Mergeable = prNode?["mergeable"] is JsonNode m ? m.GetValue<bool>() : null;
-
-            // Fetch reviews, check runs, comments in parallel.
-            var reviewsTask = LoadReviewsAsync(client, owner, repo, pr.Number);
-            var checksTask = pr.HeadSha != null
-                ? LoadCheckRunsAsync(client, owner, repo, pr.HeadSha)
-                : Task.FromResult(new List<CheckRunInfo>());
-            var commentsTask = LoadCommentsAsync(client, owner, repo, pr.Number);
-
-            await Task.WhenAll(reviewsTask, checksTask, commentsTask);
-
-            pr.Reviews = reviewsTask.Result;
-            pr.CheckRuns = checksTask.Result;
-            pr.Comments = commentsTask.Result;
-            pr.DetailsLoaded = true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to load details for PR #{Number}", pr.Number);
-            pr.DetailsLoaded = true;
-        }
-    }
-
-    private async Task<List<PrReview>> LoadReviewsAsync(HttpClient client, string owner, string repo, int number)
-    {
-        var url = $"{GitHubApiBase}/repos/{owner}/{repo}/pulls/{number}/reviews?per_page=100";
-        var json = await client.GetStringAsync(url);
-        var array = JsonNode.Parse(json)?.AsArray();
-        if (array is null) return [];
-
-        return array
-            .Where(r => !IsBotLogin(r?["user"]?["login"]?.ToString()))
-            .Select(r => new PrReview
-            {
-                Author = r!["user"]?["login"]?.ToString() ?? "",
-                AvatarUrl = r["user"]?["avatar_url"]?.ToString(),
-                State = r["state"]?.ToString() ?? "",
-                SubmittedAt = r["submitted_at"]?.GetValue<DateTimeOffset>(),
-            })
-            .ToList();
-    }
-
     private async Task<List<CheckRunInfo>> LoadCheckRunsAsync(HttpClient client, string owner, string repo, string sha)
     {
         var allCheckRuns = new List<CheckRunInfo>();
@@ -481,24 +420,6 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         }
 
         return allCheckRuns;
-    }
-
-    private async Task<List<PrComment>> LoadCommentsAsync(HttpClient client, string owner, string repo, int number)
-    {
-        var url = $"{GitHubApiBase}/repos/{owner}/{repo}/issues/{number}/comments?per_page=100";
-        var json = await client.GetStringAsync(url);
-        var array = JsonNode.Parse(json)?.AsArray();
-        if (array is null) return [];
-
-        return array
-            .Where(c => !IsBotLogin(c?["user"]?["login"]?.ToString()))
-            .Select(c => new PrComment
-            {
-                Author = c!["user"]?["login"]?.ToString() ?? "",
-                Body = Truncate(c["body"]?.ToString() ?? "", 200),
-                CreatedAt = c["created_at"]?.GetValue<DateTimeOffset>() ?? default,
-            })
-            .ToList();
     }
 
     /// <summary>
