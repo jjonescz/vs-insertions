@@ -72,6 +72,7 @@ else
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
                     var isEnabled = row.Subscription?.Enabled ?? true;
                     var enabledSuffix = isEnabled ? "" : " (disabled)";
+                    var stuck = IsStuck(row, out var overdueTime);
 
                     <tr>
                         @* Direction *@
@@ -87,6 +88,10 @@ else
                             else
                             {
                                 <span class="badge @(isEnabled ? "bg-secondary" : "border border-secondary text-secondary")">→</span>
+                            }
+                            @if (stuck)
+                            {
+                                <span class="ms-1" title="Possibly stuck — @FormatOverdue(overdueTime) (frequency: @row.Subscription?.UpdateFrequency)">⚠️</span>
                             }
                         </td>
 
@@ -438,6 +443,50 @@ else
         row.IsSameRepo ||
         (row.Subscription != null &&
         string.Equals(row.Subscription.SourceRepoShort, row.Subscription.TargetRepoShort, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns the threshold after which a subscription with the given frequency is considered stuck.</summary>
+    private static TimeSpan? GetFrequencyThreshold(string? frequency) => frequency?.ToLowerInvariant() switch
+    {
+        "everybuild" => TimeSpan.FromDays(2),
+        "everyday" or "twicedaily" => TimeSpan.FromDays(3),
+        "everyweek" => TimeSpan.FromDays(10),
+        "everytwoweeks" => TimeSpan.FromDays(21),
+        "everymonth" => TimeSpan.FromDays(45),
+        _ => null,
+    };
+
+    /// <summary>Checks if a subscription row might be stuck (no open PR and last PR is older than expected).</summary>
+    private static bool IsStuck(UnifiedFlowRow row, out TimeSpan overdue)
+    {
+        overdue = default;
+        if (row.Subscription is not { Enabled: true }) return false;
+
+        var threshold = GetFrequencyThreshold(row.Subscription.UpdateFrequency);
+        if (threshold is null) return false;
+
+        // Not stuck if there's an open PR.
+        if (row.Prs.Any(p => p.State == "open")) return false;
+
+        // Use the most recent closed/merged PR's UpdatedAt as the reference point.
+        var lastPr = row.Prs.OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt).FirstOrDefault();
+        var lastDate = lastPr?.UpdatedAt ?? lastPr?.CreatedAt;
+        if (lastDate is null) return false;
+
+        var elapsed = DateTimeOffset.UtcNow - lastDate.Value;
+        if (elapsed > threshold.Value)
+        {
+            overdue = elapsed - threshold.Value;
+            return true;
+        }
+        return false;
+    }
+
+    private static string FormatOverdue(TimeSpan overdue)
+    {
+        if (overdue.TotalDays >= 1) return $"{(int)overdue.TotalDays}d overdue";
+        if (overdue.TotalHours >= 1) return $"{(int)overdue.TotalHours}h overdue";
+        return "overdue";
+    }
 
     private static string CheckConclusionToEmoji(string? conclusion, string status) => (conclusion, status) switch
     {
