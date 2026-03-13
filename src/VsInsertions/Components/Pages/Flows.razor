@@ -460,6 +460,22 @@ else
     private async Task LoadAllFlowPrsAsync()
     {
         await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
+        LoadDisplayedPrDetailsInBackground();
+    }
+
+    /// <summary>
+    /// Loads details only for PRs that appear in the unified flow rows (i.e., actually displayed).
+    /// </summary>
+    private void LoadDisplayedPrDetailsInBackground()
+    {
+        var displayedPrs = new HashSet<FlowPr>(unifiedRows.SelectMany(r => r.Prs));
+        foreach (var pr in displayedPrs)
+        {
+            if (!pr.DetailsLoaded)
+            {
+                LoadPrDetailsInBackground(pr);
+            }
+        }
     }
 
     private async Task LoadFlowPrsAsync()
@@ -506,31 +522,8 @@ else
             closedMergePrs = closedMergeTask.Result
                 .OrderByDescending(p => p.Number)
                 .ToList();
-            // Load details for all PRs.
-            foreach (var pr in flowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedFlowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in locPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedLocPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in mergePrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedMergePrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
+            // Details are loaded later by LoadDisplayedPrDetailsInBackground
+            // to avoid fetching reviews/checks/comments for PRs that won't be displayed.
         }
         catch (Exception ex)
         {
@@ -586,14 +579,8 @@ else
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
-            foreach (var pr in outgoingFlowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-            foreach (var pr in closedOutgoingFlowPrs)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
+            // Details are loaded later by LoadDisplayedPrDetailsInBackground
+            // to avoid fetching reviews/checks/comments for PRs that won't be displayed.
         }
         catch (Exception ex)
         {
