@@ -213,6 +213,7 @@ public sealed class GitHubRateLimitHandler(ILogger logger) : DelegatingHandler
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
             return true;
 
+        // Primary rate limit: 403 with x-ratelimit-remaining: 0.
         if (response.StatusCode == HttpStatusCode.Forbidden &&
             response.Headers.TryGetValues("x-ratelimit-remaining", out var values) &&
             values.FirstOrDefault() == "0")
@@ -223,35 +224,15 @@ public sealed class GitHubRateLimitHandler(ILogger logger) : DelegatingHandler
             response.Headers.RetryAfter is not null)
             return true;
 
-        // Secondary rate limit: 403 without explicit headers — GitHub sometimes
-        // returns 403 for secondary/abuse limits without Retry-After.
-        if (response.StatusCode == HttpStatusCode.Forbidden)
-            return true;
+        // Note: plain 403 without rate-limit indicators is NOT treated as rate limiting
+        // — it likely indicates an auth or permission error.
 
         return false;
     }
 
+    // Called only when IsRateLimited is true.
     private static bool IsSecondaryRateLimit(HttpResponseMessage response)
-    {
-        // Secondary rate limits return 403 (sometimes 429) without
-        // x-ratelimit-remaining: 0 — typically with Retry-After or no rate limit headers at all.
-        if (response.StatusCode != HttpStatusCode.Forbidden)
-            return false;
-
-        if (response.Headers.RetryAfter is not null)
-            return true;
-
-        // If x-ratelimit-remaining is NOT 0, this is a secondary limit (not primary).
-        if (response.Headers.TryGetValues("x-ratelimit-remaining", out var values) &&
-            values.FirstOrDefault() != "0")
-            return true;
-
-        // No rate limit headers at all — treat as secondary.
-        if (!response.Headers.Contains("x-ratelimit-remaining"))
-            return true;
-
-        return false;
-    }
+        => response.Headers.RetryAfter is not null;
 
     /// <summary>
     /// Calculates retry delay with exponential backoff and jitter.
