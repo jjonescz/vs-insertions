@@ -609,6 +609,9 @@ else
         try
         {
             await LoadPrDetailsAsync(pr);
+            // After details load, grouping may change (e.g., LOC PRs regrouped by TargetBranch),
+            // revealing new PRs that need their details loaded.
+            LoadDisplayedPrDetailsInBackground();
         }
         catch (Exception ex)
         {
