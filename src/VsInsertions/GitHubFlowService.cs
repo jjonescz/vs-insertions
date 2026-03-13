@@ -39,19 +39,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             return prs;
 
         foreach (var item in items)
-        {
-            var number = (int)item!["number"]!;
-            prs.Add(new FlowPr
-            {
-                Number = number,
-                Repo = $"{owner}/{repo}",
-                Title = item["title"]?.ToString() ?? "",
-                State = item["state"]?.ToString() ?? "",
-                Url = item["html_url"]?.ToString() ?? $"https://github.com/{owner}/{repo}/pull/{number}",
-                CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
-                UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
-            });
-        }
+            prs.Add(ParseSearchItem(item!, $"{owner}/{repo}"));
 
         return prs;
     }
@@ -77,19 +65,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             return prs;
 
         foreach (var item in items)
-        {
-            var number = (int)item!["number"]!;
-            prs.Add(new FlowPr
-            {
-                Number = number,
-                Repo = $"{owner}/{repo}",
-                Title = item["title"]?.ToString() ?? "",
-                State = item["state"]?.ToString() ?? "",
-                Url = item["html_url"]?.ToString() ?? $"https://github.com/{owner}/{repo}/pull/{number}",
-                CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
-                UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
-            });
-        }
+            prs.Add(ParseSearchItem(item!, $"{owner}/{repo}"));
 
         return prs;
     }
@@ -115,19 +91,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             return prs;
 
         foreach (var item in items)
-        {
-            var number = (int)item!["number"]!;
-            prs.Add(new FlowPr
-            {
-                Number = number,
-                Repo = $"{owner}/{repo}",
-                Title = item["title"]?.ToString() ?? "",
-                State = item["state"]?.ToString() ?? "",
-                Url = item["html_url"]?.ToString() ?? $"https://github.com/{owner}/{repo}/pull/{number}",
-                CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
-                UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
-            });
-        }
+            prs.Add(ParseSearchItem(item!, $"{owner}/{repo}"));
 
         return prs;
     }
@@ -173,21 +137,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
                 foreach (var item in items)
                 {
-                    var number = (int)item!["number"]!;
-                    var htmlUrl = item["html_url"]?.ToString() ?? "";
-                    // Extract repo from the URL: https://github.com/{owner}/{repo}/issues/{number}
-                    var repo = ExtractRepoFromUrl(htmlUrl);
-
-                    allPrs.Add(new FlowPr
-                    {
-                        Number = number,
-                        Repo = repo ?? "",
-                        Title = item["title"]?.ToString() ?? "",
-                        State = item["state"]?.ToString() ?? "",
-                        Url = htmlUrl,
-                        CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
-                        UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
-                    });
+                    var htmlUrl = item!["html_url"]?.ToString() ?? "";
+                    var repo = ExtractRepoFromUrl(htmlUrl) ?? "";
+                    allPrs.Add(ParseSearchItem(item, repo));
                 }
             }
             catch (Exception ex)
@@ -197,6 +149,22 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         }
 
         return allPrs;
+    }
+
+    private static FlowPr ParseSearchItem(JsonNode item, string repo)
+    {
+        var number = (int)item["number"]!;
+        return new FlowPr
+        {
+            Number = number,
+            Repo = repo,
+            Title = item["title"]?.ToString() ?? "",
+            State = item["state"]?.ToString() ?? "",
+            Url = item["html_url"]?.ToString() ?? $"https://github.com/{repo}/pull/{number}",
+            CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
+            UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
+            Merged = item["pull_request"]?["merged_at"] is not null,
+        };
     }
 
     private static string? ExtractRepoFromUrl(string htmlUrl)
