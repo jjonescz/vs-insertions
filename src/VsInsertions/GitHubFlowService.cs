@@ -7,6 +7,7 @@ namespace VsInsertions;
 public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 {
     private static readonly string GitHubApiBase = "https://api.github.com";
+    private const string GraphQLUrl = "https://api.github.com/graphql";
 
     private static readonly HashSet<string> BotLogins = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -20,165 +21,269 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     };
 
     /// <summary>
-    /// Lists localization PRs (created by dotnet-bot via OneLocBuild) for the given repo.
+    /// Searches for all flow-related PRs in a single GraphQL request.
+    /// Combines incoming flow PRs, localization PRs, merge PRs, and outgoing flow PRs.
     /// </summary>
-    public async Task<List<FlowPr>> GetLocPrsAsync(
+    public async Task<FlowPrSearchResults> SearchAllPrsAsync(
         HttpClient client,
         string owner,
         string repo,
-        string state = "open",
-        int perPage = 30)
+        IEnumerable<string> outgoingTargetRepos)
     {
-        var url = $"{GitHubApiBase}/search/issues?q=repo:{owner}/{repo}+is:pr+author:dotnet-bot+state:{state}+in:title+{Uri.EscapeDataString("Localized file check-in")}&per_page={perPage}&sort=created&order=desc";
-        var json = await client.GetStringAsync(url);
-        var searchResult = JsonNode.Parse(json);
-
-        var prs = new List<FlowPr>();
-        var items = searchResult?["items"]?.AsArray();
-        if (items is null)
-            return prs;
-
-        foreach (var item in items)
-            prs.Add(ParseSearchItem(item!, $"{owner}/{repo}"));
-
-        return prs;
-    }
-
-    /// <summary>
-    /// Lists inter-branch merge PRs (created by github-actions[bot] via arcade's inter-branch-merge workflow).
-    /// Titles look like: "[automated] Merge branch 'release/10.0.3xx' => 'main'".
-    /// </summary>
-    public async Task<List<FlowPr>> GetMergePrsAsync(
-        HttpClient client,
-        string owner,
-        string repo,
-        string state = "open",
-        int perPage = 30)
-    {
-        var url = $"{GitHubApiBase}/search/issues?q=repo:{owner}/{repo}+is:pr+author:app/github-actions+state:{state}+in:title+{Uri.EscapeDataString("[automated] Merge branch")}&per_page={perPage}&sort=created&order=desc";
-        var json = await client.GetStringAsync(url);
-        var searchResult = JsonNode.Parse(json);
-
-        var prs = new List<FlowPr>();
-        var items = searchResult?["items"]?.AsArray();
-        if (items is null)
-            return prs;
-
-        foreach (var item in items)
-            prs.Add(ParseSearchItem(item!, $"{owner}/{repo}"));
-
-        return prs;
-    }
-
-    /// <summary>
-    /// Lists flow PRs (created by dotnet-maestro) for the given repo.
-    /// </summary>
-    public async Task<List<FlowPr>> GetFlowPrsAsync(
-        HttpClient client,
-        string owner,
-        string repo,
-        string state = "open",
-        int perPage = 30)
-    {
-        // Search PRs authored by dotnet-maestro[bot].
-        var url = $"{GitHubApiBase}/search/issues?q=repo:{owner}/{repo}+is:pr+author:app/dotnet-maestro+state:{state}&per_page={perPage}&sort=created&order=desc";
-        var json = await client.GetStringAsync(url);
-        var searchResult = JsonNode.Parse(json);
-
-        var prs = new List<FlowPr>();
-        var items = searchResult?["items"]?.AsArray();
-        if (items is null)
-            return prs;
-
-        foreach (var item in items)
-            prs.Add(ParseSearchItem(item!, $"{owner}/{repo}"));
-
-        return prs;
-    }
-
-    /// <summary>
-    /// Searches for outgoing flow PRs — PRs created by dotnet-maestro in other repos
-    /// that originate from the given source repo.
-    /// </summary>
-    public async Task<List<FlowPr>> GetOutgoingFlowPrsAsync(
-        HttpClient client,
-        string sourceOwner,
-        string sourceRepo,
-        IEnumerable<string> targetRepos,
-        string state = "open",
-        int perPage = 30)
-    {
-        // Build repo filter for target repos (only GitHub dotnet/ repos).
-        var repoFilters = targetRepos
+        var outgoingRepos = outgoingTargetRepos
             .Where(r => r.StartsWith("dotnet/", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(r => $"repo:{r}")
             .ToList();
 
-        if (repoFilters.Count == 0)
-            return [];
+        const string nodeFields = "... on PullRequest { number title state url createdAt updatedAt merged baseRefName }";
+        const string nodeFieldsWithRepo = "... on PullRequest { number title state url createdAt updatedAt merged baseRefName repository { owner { login } name } }";
 
-        var allPrs = new List<FlowPr>();
+        var variables = new Dictionary<string, string>();
+        var varDecls = new List<string>();
+        var searchParts = new List<string>();
 
-        // GitHub search API has a limit on query length, so batch if needed.
-        // Search for PRs with the source repo name in the title.
-        foreach (var batch in repoFilters.Chunk(5))
+        void AddSearch(string alias, string varName, string queryValue, string fields)
         {
-            var repoQuery = string.Join('+', batch);
-            var url = $"{GitHubApiBase}/search/issues?q={repoQuery}+is:pr+author:app/dotnet-maestro+state:{state}+in:title+{Uri.EscapeDataString($"{sourceOwner}/{sourceRepo}")}&per_page={perPage}&sort=created&order=desc";
+            variables[varName] = queryValue;
+            varDecls.Add($"${varName}: String!");
+            searchParts.Add($"{alias}: search(query: ${varName}, type: ISSUE, first: 100) {{ nodes {{ {fields} }} }}");
+        }
 
-            try
+        AddSearch("flowPrs", "q0", $"repo:{owner}/{repo} is:pr author:app/dotnet-maestro", nodeFields);
+        AddSearch("locPrs", "q1", $"repo:{owner}/{repo} is:pr author:dotnet-bot \"Localized file check-in\"", nodeFields);
+        AddSearch("mergePrs", "q2", $"repo:{owner}/{repo} is:pr author:app/github-actions \"[automated] Merge branch\"", nodeFields);
+
+        int varIdx = 3;
+        int outBatchCount = 0;
+        foreach (var batch in outgoingRepos.Chunk(5))
+        {
+            var repos = string.Join(' ', batch.Select(r => $"repo:{r}"));
+            AddSearch($"out_{outBatchCount}", $"q{varIdx}",
+                $"{repos} is:pr author:app/dotnet-maestro \"{owner}/{repo}\"", nodeFieldsWithRepo);
+            varIdx++;
+            outBatchCount++;
+        }
+
+        var gqlQuery = $"query({string.Join(", ", varDecls)}) {{ {string.Join(" ", searchParts)} }}";
+        var data = await ExecuteGraphQLAsync(client, gqlQuery, variables);
+
+        var result = new FlowPrSearchResults();
+        var repoName = $"{owner}/{repo}";
+
+        SplitSearchByState(data?["flowPrs"], repoName, result.OpenFlowPrs, result.ClosedFlowPrs);
+        SplitSearchByState(data?["locPrs"], repoName, result.OpenLocPrs, result.ClosedLocPrs);
+        SplitSearchByState(data?["mergePrs"], repoName, result.OpenMergePrs, result.ClosedMergePrs);
+
+        for (int i = 0; i < outBatchCount; i++)
+            SplitSearchByState(data?[$"out_{i}"], null, result.OpenOutgoingFlowPrs, result.ClosedOutgoingFlowPrs);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Loads details (reviews, check runs, comments) for multiple PRs in a single GraphQL request.
+    /// </summary>
+    public async Task LoadPrDetailsBatchAsync(HttpClient client, IEnumerable<FlowPr> prs)
+    {
+        var prList = prs.Where(p => !p.DetailsLoaded).ToList();
+        if (prList.Count == 0) return;
+
+        const string detailsFields = """
+            headRefOid headRefName baseRefName merged mergeable
+            reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
+            commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
+                ... on CheckRun { databaseId name status conclusion detailsUrl permalink }
+            } } } } } }
+            comments(first: 100) { nodes { author { login } body createdAt } }
+            """;
+
+        try
+        {
+            // Group by repo for efficient querying.
+            var byRepo = prList.GroupBy(p => p.Repo, StringComparer.OrdinalIgnoreCase).ToList();
+            var queryParts = new List<string>();
+
+            int repoIdx = 0;
+            foreach (var group in byRepo)
             {
-                var json = await client.GetStringAsync(url);
-                var searchResult = JsonNode.Parse(json);
-                var items = searchResult?["items"]?.AsArray();
-                if (items is null)
+                var parts = group.Key.Split('/');
+                if (parts.Length != 2) continue;
+                if (!IsValidGraphQLIdentifier(parts[0]) || !IsValidGraphQLIdentifier(parts[1]))
                     continue;
 
-                foreach (var item in items)
-                {
-                    var htmlUrl = item!["html_url"]?.ToString() ?? "";
-                    var repo = ExtractRepoFromUrl(htmlUrl) ?? "";
-                    allPrs.Add(ParseSearchItem(item, repo));
-                }
+                var prAliases = group.Select(pr =>
+                    $"pr_{pr.Number}: pullRequest(number: {pr.Number}) {{ {detailsFields} }}");
+
+                queryParts.Add(
+                    $"repo_{repoIdx}: repository(owner: \"{parts[0]}\", name: \"{parts[1]}\") {{ {string.Join(" ", prAliases)} }}");
+                repoIdx++;
             }
-            catch (Exception ex)
+
+            if (queryParts.Count == 0) return;
+
+            var gqlQuery = $"{{ {string.Join(" ", queryParts)} }}";
+            var data = await ExecuteGraphQLAsync(client, gqlQuery);
+
+            if (data is null) return;
+
+            repoIdx = 0;
+            foreach (var group in byRepo)
             {
-                logger.LogWarning(ex, "Failed to search outgoing flow PRs in repos: {Repos}", string.Join(", ", batch));
+                var parts = group.Key.Split('/');
+                if (parts.Length != 2 || !IsValidGraphQLIdentifier(parts[0]) || !IsValidGraphQLIdentifier(parts[1]))
+                    continue;
+
+                var repoNode = data[$"repo_{repoIdx}"];
+                if (repoNode is not null)
+                {
+                    foreach (var pr in group)
+                    {
+                        var prNode = repoNode[$"pr_{pr.Number}"];
+                        if (prNode is not null)
+                            PopulatePrDetails(pr, prNode);
+                    }
+                }
+                repoIdx++;
             }
         }
-
-        return allPrs;
-    }
-
-    private static FlowPr ParseSearchItem(JsonNode item, string repo)
-    {
-        var number = (int)item["number"]!;
-        return new FlowPr
+        catch (Exception ex)
         {
-            Number = number,
-            Repo = repo,
-            Title = item["title"]?.ToString() ?? "",
-            State = item["state"]?.ToString() ?? "",
-            Url = item["html_url"]?.ToString() ?? $"https://github.com/{repo}/pull/{number}",
-            CreatedAt = item["created_at"]?.GetValue<DateTimeOffset>() ?? default,
-            UpdatedAt = item["updated_at"]?.GetValue<DateTimeOffset>(),
-            Merged = item["pull_request"]?["merged_at"] is not null,
-        };
-    }
-
-    private static string? ExtractRepoFromUrl(string htmlUrl)
-    {
-        // https://github.com/{owner}/{repo}/...
-        if (htmlUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
-        {
-            var path = htmlUrl["https://github.com/".Length..];
-            var parts = path.Split('/');
-            if (parts.Length >= 2)
-                return $"{parts[0]}/{parts[1]}";
+            logger.LogWarning(ex, "Failed to load PR details batch via GraphQL");
         }
-        return null;
+        finally
+        {
+            foreach (var pr in prList)
+                pr.DetailsLoaded = true;
+        }
     }
+
+    private async Task<JsonNode?> ExecuteGraphQLAsync(
+        HttpClient client,
+        string query,
+        Dictionary<string, string>? variables = null)
+    {
+        var requestObj = new JsonObject { ["query"] = query };
+        if (variables is { Count: > 0 })
+        {
+            var varsObj = new JsonObject();
+            foreach (var (key, value) in variables)
+                varsObj[key] = value;
+            requestObj["variables"] = varsObj;
+        }
+
+        var response = await client.PostAsync(GraphQLUrl,
+            new StringContent(requestObj.ToJsonString(), System.Text.Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var result = JsonNode.Parse(json);
+
+        if (result?["errors"] is JsonNode errors)
+            logger.LogWarning("GraphQL errors: {Errors}", errors.ToJsonString());
+
+        return result?["data"];
+    }
+
+    private static void SplitSearchByState(
+        JsonNode? searchResult,
+        string? defaultRepo,
+        List<FlowPr> openList,
+        List<FlowPr> closedList)
+    {
+        var nodes = searchResult?["nodes"]?.AsArray();
+        if (nodes is null) return;
+
+        foreach (var node in nodes)
+        {
+            if (node is null || node["number"] is null)
+                continue;
+
+            var repo = defaultRepo;
+            if (repo is null)
+            {
+                var repoOwner = node["repository"]?["owner"]?["login"]?.ToString();
+                var repoName = node["repository"]?["name"]?.ToString();
+                repo = $"{repoOwner}/{repoName}";
+            }
+
+            var number = node["number"]!.GetValue<int>();
+            var state = node["state"]?.ToString();
+            var merged = node["merged"]?.GetValue<bool>() ?? false;
+
+            var pr = new FlowPr
+            {
+                Number = number,
+                Repo = repo,
+                Title = node["title"]?.ToString() ?? "",
+                State = state == "OPEN" ? "open" : "closed",
+                Url = node["url"]?.ToString() ?? $"https://github.com/{repo}/pull/{number}",
+                CreatedAt = node["createdAt"]?.GetValue<DateTimeOffset>() ?? default,
+                UpdatedAt = node["updatedAt"]?.GetValue<DateTimeOffset>(),
+                Merged = merged,
+                TargetBranch = node["baseRefName"]?.ToString(),
+            };
+
+            if (pr.State == "open")
+                openList.Add(pr);
+            else
+                closedList.Add(pr);
+        }
+    }
+
+    private void PopulatePrDetails(FlowPr pr, JsonNode node)
+    {
+        pr.HeadSha = node["headRefOid"]?.ToString();
+        pr.SourceBranch = node["headRefName"]?.ToString();
+        pr.TargetBranch = node["baseRefName"]?.ToString();
+        pr.Merged = node["merged"]?.GetValue<bool>() ?? false;
+        pr.Mergeable = node["mergeable"]?.ToString() switch
+        {
+            "MERGEABLE" => true,
+            "CONFLICTING" => false,
+            _ => null,
+        };
+
+        var reviewNodes = node["reviews"]?["nodes"]?.AsArray();
+        pr.Reviews = reviewNodes?
+            .Where(r => r is not null && !IsBotLogin(r["author"]?["login"]?.ToString()))
+            .Select(r => new PrReview
+            {
+                Author = r!["author"]?["login"]?.ToString() ?? "",
+                AvatarUrl = r["author"]?["avatarUrl"]?.ToString(),
+                State = r["state"]?.ToString() ?? "",
+                SubmittedAt = r["submittedAt"]?.GetValue<DateTimeOffset>(),
+            })
+            .ToList() ?? [];
+
+        var checkRunNodes = node["commits"]?["nodes"]?[0]?["commit"]
+            ?["statusCheckRollup"]?["contexts"]?["nodes"]?.AsArray();
+        pr.CheckRuns = checkRunNodes?
+            .Where(c => c?["databaseId"] is not null)
+            .Select(c => new CheckRunInfo
+            {
+                Id = c!["databaseId"]!.GetValue<long>(),
+                Name = c["name"]?.ToString() ?? "",
+                Status = c["status"]?.ToString()?.ToLowerInvariant() ?? "",
+                Conclusion = c["conclusion"]?.ToString()?.ToLowerInvariant(),
+                Url = c["permalink"]?.ToString() ?? c["detailsUrl"]?.ToString(),
+            })
+            .ToList() ?? [];
+
+        var commentNodes = node["comments"]?["nodes"]?.AsArray();
+        pr.Comments = commentNodes?
+            .Where(c => c is not null && !IsBotLogin(c["author"]?["login"]?.ToString()))
+            .Select(c => new PrComment
+            {
+                Author = c!["author"]?["login"]?.ToString() ?? "",
+                Body = Truncate(c["body"]?.ToString() ?? "", 200),
+                CreatedAt = c["createdAt"]?.GetValue<DateTimeOffset>() ?? default,
+            })
+            .ToList() ?? [];
+
+        pr.DetailsLoaded = true;
+    }
+
+    private static bool IsValidGraphQLIdentifier(string value)
+        => Regex.IsMatch(value, @"^[a-zA-Z0-9_.\-]+$");
 
     /// <summary>
     /// Loads details (reviews, check runs, comments) for a single PR.
@@ -571,6 +676,18 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength] + "…";
+}
+
+public sealed class FlowPrSearchResults
+{
+    public List<FlowPr> OpenFlowPrs { get; } = [];
+    public List<FlowPr> ClosedFlowPrs { get; } = [];
+    public List<FlowPr> OpenLocPrs { get; } = [];
+    public List<FlowPr> ClosedLocPrs { get; } = [];
+    public List<FlowPr> OpenMergePrs { get; } = [];
+    public List<FlowPr> ClosedMergePrs { get; } = [];
+    public List<FlowPr> OpenOutgoingFlowPrs { get; } = [];
+    public List<FlowPr> ClosedOutgoingFlowPrs { get; } = [];
 }
 
 public sealed class FlowPr

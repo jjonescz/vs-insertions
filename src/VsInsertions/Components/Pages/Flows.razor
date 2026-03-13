@@ -459,87 +459,6 @@ else
     // === Load Flow PRs ===
     private async Task LoadAllFlowPrsAsync()
     {
-        await Task.WhenAll(LoadFlowPrsAsync(), LoadOutgoingFlowPrsAsync());
-        LoadDisplayedPrDetailsInBackground();
-    }
-
-    /// <summary>
-    /// Loads details only for PRs that appear in the unified flow rows (i.e., actually displayed).
-    /// </summary>
-    private void LoadDisplayedPrDetailsInBackground()
-    {
-        var displayedPrs = new HashSet<FlowPr>(unifiedRows.SelectMany(r => r.Prs));
-        foreach (var pr in displayedPrs)
-        {
-            if (!pr.DetailsLoaded)
-            {
-                LoadPrDetailsInBackground(pr);
-            }
-        }
-    }
-
-    private async Task LoadFlowPrsAsync()
-    {
-        if (string.IsNullOrEmpty(currentRepo))
-            return;
-
-        var parts = currentRepo.Split('/');
-        if (parts.Length != 2)
-            return;
-
-        loadingPrs = true;
-        prError = null;
-        expandedRows.Clear();
-        StateHasChanged();
-
-        try
-        {
-            var openTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedTask = GitHubFlowService.GetFlowPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 30);
-            var openLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedLocTask = GitHubFlowService.GetLocPrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 30);
-            var openMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1]);
-            var closedMergeTask = GitHubFlowService.GetMergePrsAsync(gitHubClient, parts[0], parts[1], state: "closed", perPage: 30);
-            await Task.WhenAll(openTask, closedTask, openLocTask, closedLocTask, openMergeTask, closedMergeTask);
-
-            flowPrs = openTask.Result
-                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(p => p.Number)
-                .ToList();
-            closedFlowPrs = closedTask.Result
-                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(p => p.Number)
-                .ToList();
-            locPrs = openLocTask.Result
-                .OrderByDescending(p => p.Number)
-                .ToList();
-            closedLocPrs = closedLocTask.Result
-                .OrderByDescending(p => p.Number)
-                .ToList();
-            mergePrs = openMergeTask.Result
-                .OrderByDescending(p => p.Number)
-                .ToList();
-            closedMergePrs = closedMergeTask.Result
-                .OrderByDescending(p => p.Number)
-                .ToList();
-            // Details are loaded later by LoadDisplayedPrDetailsInBackground
-            // to avoid fetching reviews/checks/comments for PRs that won't be displayed.
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to load flow PRs");
-            prError = $"Failed to load flow PRs: {ex.Message}";
-        }
-        finally
-        {
-            loadingPrs = false;
-            StateHasChanged();
-        }
-    }
-
-    // === Load Outgoing Flow PRs ===
-    private async Task LoadOutgoingFlowPrsAsync()
-    {
         if (string.IsNullOrEmpty(currentRepo) || config is null)
             return;
 
@@ -549,47 +468,81 @@ else
 
         var targetRepos = outgoingSubscriptions
             .Select(s => s.TargetRepoShort)
-            .Where(r => !string.Equals(r, currentRepo, StringComparison.OrdinalIgnoreCase)) // Same-repo PRs are loaded by GetFlowPrsAsync.
+            .Where(r => !string.Equals(r, currentRepo, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (targetRepos.Count == 0)
-        {
-            outgoingFlowPrs = [];
-            return;
-        }
-
+        loadingPrs = true;
         loadingOutgoingPrs = true;
+        prError = null;
         outgoingPrError = null;
+        expandedRows.Clear();
         StateHasChanged();
 
         try
         {
-            var openTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
+            var results = await GitHubFlowService.SearchAllPrsAsync(
                 gitHubClient, parts[0], parts[1], targetRepos);
-            var closedTask = GitHubFlowService.GetOutgoingFlowPrsAsync(
-                gitHubClient, parts[0], parts[1], targetRepos, state: "closed", perPage: 30);
-            await Task.WhenAll(openTask, closedTask);
 
-            outgoingFlowPrs = openTask.Result
+            flowPrs = results.OpenFlowPrs
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
-            closedOutgoingFlowPrs = closedTask.Result
+            closedFlowPrs = results.ClosedFlowPrs
                 .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(p => p.Number)
                 .ToList();
-            // Details are loaded later by LoadDisplayedPrDetailsInBackground
-            // to avoid fetching reviews/checks/comments for PRs that won't be displayed.
+            locPrs = results.OpenLocPrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            closedLocPrs = results.ClosedLocPrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            mergePrs = results.OpenMergePrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            closedMergePrs = results.ClosedMergePrs
+                .OrderByDescending(p => p.Number)
+                .ToList();
+            outgoingFlowPrs = results.OpenOutgoingFlowPrs
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
+            closedOutgoingFlowPrs = results.ClosedOutgoingFlowPrs
+                .OrderBy(p => p.Repo, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(p => p.Number)
+                .ToList();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to load outgoing flow PRs");
-            outgoingPrError = $"Failed to load outgoing flow PRs: {ex.Message}";
+            Logger.LogError(ex, "Failed to load flow PRs");
+            prError = $"Failed to load flow PRs: {ex.Message}";
         }
         finally
         {
+            loadingPrs = false;
             loadingOutgoingPrs = false;
+            StateHasChanged();
+        }
+
+        await LoadDisplayedPrDetailsAsync();
+    }
+
+    /// <summary>
+    /// Loads details for all currently displayed PRs in one batched GraphQL request.
+    /// Re-checks after loading in case grouping changes reveal new PRs.
+    /// </summary>
+    private async Task LoadDisplayedPrDetailsAsync()
+    {
+        while (true)
+        {
+            var prsToLoad = unifiedRows.SelectMany(r => r.Prs)
+                .Where(p => !p.DetailsLoaded)
+                .Distinct()
+                .ToList();
+            if (prsToLoad.Count == 0) break;
+
+            await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, prsToLoad);
             StateHasChanged();
         }
     }
@@ -602,22 +555,6 @@ else
 
         await GitHubFlowService.LoadPrDetailsAsync(gitHubClient, parts[0], parts[1], pr);
         StateHasChanged();
-    }
-
-    private async void LoadPrDetailsInBackground(FlowPr pr)
-    {
-        try
-        {
-            await LoadPrDetailsAsync(pr);
-            // After details load, grouping may change (e.g., LOC PRs regrouped by TargetBranch),
-            // revealing new PRs that need their details loaded.
-            LoadDisplayedPrDetailsInBackground();
-        }
-        catch (Exception ex)
-        {
-            // Swallow — details are optional.
-            Logger.LogError(ex, "Failed to load PR details");
-        }
     }
 
     // === Actions ===
@@ -709,7 +646,7 @@ else
             // Refresh details after retry.
             if (success)
             {
-                LoadPrDetailsInBackground(pr);
+                await LoadPrDetailsAsync(pr);
             }
         }
         catch (Exception ex)
