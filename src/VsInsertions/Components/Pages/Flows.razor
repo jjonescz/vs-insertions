@@ -820,8 +820,7 @@ else
             return [];
 
         var rows = new List<UnifiedFlowRow>();
-        var matchedIncomingPrNumbers = new HashSet<int>();
-        var matchedOutgoingPrNumbers = new HashSet<int>();
+
 
         // Incoming subscriptions (other → selected repo).
         foreach (var sub in incomingSubscriptions)
@@ -831,9 +830,6 @@ else
                     && MatchesTargetBranch(pr, sub.TargetBranch))
                 .OrderByDescending(pr => pr.Number)
                 .ToList();
-            foreach (var pr in matched)
-                matchedIncomingPrNumbers.Add(pr.Number);
-
             // If no open PRs, fall back to the most recent closed PR.
             if (matched.Count == 0)
             {
@@ -866,9 +862,6 @@ else
                     && MatchesTargetBranch(pr, sub.TargetBranch))
                 .OrderByDescending(pr => pr.Number)
                 .ToList();
-            foreach (var pr in matched)
-                matchedOutgoingPrNumbers.Add(pr.Number);
-
             // If no open PRs, fall back to the most recent closed PR.
             if (matched.Count == 0)
             {
@@ -920,20 +913,6 @@ else
             }
         }
 
-        // Unmatched incoming PRs.
-        if (flowPrs != null)
-        {
-            foreach (var pr in flowPrs.Where(p => !matchedIncomingPrNumbers.Contains(p.Number)))
-            {
-                rows.Add(new UnifiedFlowRow
-                {
-                    OtherRepo = ExtractSourceRepoFromTitle(pr.Title) ?? "unknown",
-                    IsIncoming = true,
-                    Prs = [pr],
-                });
-            }
-        }
-
         // Loc PRs — group by target branch, one row per branch.
         {
             var allLoc = (locPrs ?? []).Concat(closedLocPrs ?? []).ToList();
@@ -955,44 +934,12 @@ else
             }
         }
 
-        // Unmatched outgoing PRs.
-        if (outgoingFlowPrs != null)
-        {
-            foreach (var pr in outgoingFlowPrs.Where(p => !matchedOutgoingPrNumbers.Contains(p.Number)))
-            {
-                rows.Add(new UnifiedFlowRow
-                {
-                    OtherRepo = pr.Repo,
-                    IsIncoming = false,
-                    Prs = [pr],
-                });
-            }
-        }
-
         return rows
             .OrderBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.IsIncoming ? 0 : 1)
             .ThenBy(r => r.Subscription?.Channel)
             .ThenBy(r => r.Subscription?.TargetBranch)
             .ToList();
-    }
-
-    /// <summary>
-    /// Extracts the source repo from a maestro PR title like
-    /// "[main] Update dependencies from dotnet/runtime".
-    /// </summary>
-    private static string? ExtractSourceRepoFromTitle(string title)
-    {
-        var idx = title.IndexOf("from ", StringComparison.OrdinalIgnoreCase);
-        if (idx >= 0)
-        {
-            var rest = title.AsSpan()[(idx + 5)..].Trim();
-            var end = rest.IndexOf(' ');
-            var token = end >= 0 ? rest[..end] : rest;
-            if (token.IndexOf('/') >= 0)
-                return token.ToString();
-        }
-        return null;
     }
 
     /// <summary>
