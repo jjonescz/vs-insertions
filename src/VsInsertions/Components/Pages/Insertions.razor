@@ -65,7 +65,7 @@ else if (insertions == null)
 else
 {
     <label>Repo:</label>
-    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo" @bind:after="AutoLoadRps">
         @foreach (var repo in insertions.Select(x => x.Repo).Distinct())
         {
             <option value="@repo">@repo</option>
@@ -73,7 +73,7 @@ else
     </select>
 
     <label>Target:</label>
-    <select class="form-select d-inline-block w-auto me-3" @bind="currentTargetBranch">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentTargetBranch" @bind:after="AutoLoadRps">
         @foreach (var branch in insertions.Select(x => x.TargetBranch).Distinct())
         {
             <option value="@branch">@branch</option>
@@ -331,6 +331,8 @@ else
             loading = false;
             StateHasChanged();
         }
+
+        AutoLoadRps();
     }
 
     private static (int, int, int, string) GetInsertionSortKey(VsInsertion insertion)
@@ -342,6 +344,14 @@ else
             (displayPrs || (insertion.ParsedTitle?.IsPr) != true) &&
             (displayDrafts || !insertion.IsDraft) &&
             (displayInactive || insertion.Status == PullRequestStatus.Active);
+    }
+
+    private void AutoLoadRps()
+    {
+        if (insertions != null && !insertions.Where(ShouldDisplayInsertion).Any(i => i.RpsSummary is not null))
+        {
+            LoadRps(numberOfRecentRpsToLoad);
+        }
     }
 
     private void LoadRps(int? max = null)
