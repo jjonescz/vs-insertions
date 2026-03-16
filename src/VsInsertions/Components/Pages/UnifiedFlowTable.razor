@@ -49,9 +49,12 @@ else
                 var prCount = group.Sum(r => r.Prs.Count);
                 var disabledCount = group.Count(r => r.Subscription?.Enabled == false);
                 var dirSymbol = circularCount == group.Count() ? "⇄" : (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
+                var groupCollapseKey = CurrentRepo + "::" + group.Key;
+                var isGroupCollapsed = CollapsedGroups.Contains(groupCollapseKey);
 
-                <tr class="table-light">
+                <tr class="table-light" style="cursor: pointer;" @onclick="() => ToggleGroup(groupCollapseKey)" title="Click to collapse/expand group">
                     <td colspan="@totalCols">
+                        <span class="me-1">@(isGroupCollapsed ? "▶" : "▼")</span>
                         <strong>@dirSymbol @group.Key</strong>
                         <small class="text-muted ms-2">
                             @{ var pureInCount = inCount - circularCount; }
@@ -65,6 +68,8 @@ else
                         </small>
                     </td>
                 </tr>
+
+                @if (isGroupCollapsed) { continue; }
 
                 @foreach (var row in group.OrderBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
                 {
@@ -263,6 +268,11 @@ else
                         <tr>
                             <td colspan="@totalCols">
                                 <div class="p-2" style="background-color: #f8f9fa;">
+                                    <div class="d-flex justify-content-end mb-1">
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => OnRefreshRow.InvokeAsync(row)" title="Refresh PR details">
+                                            ↻ Refresh
+                                        </button>
+                                    </div>
                                     @if (row.Subscription?.Id != null)
                                     {
                                         <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
@@ -414,12 +424,23 @@ else
     [Parameter] public string? PrError { get; set; }
     [Parameter] public string? OutgoingPrError { get; set; }
     [Parameter] public HashSet<string> ExpandedRows { get; set; } = [];
+    [Parameter] public HashSet<string> CollapsedGroups { get; set; } = [];
+    [Parameter] public string? CurrentRepo { get; set; }
     [Parameter] public FlowPr? ActionInProgressPr { get; set; }
     [Parameter] public string? ActionType { get; set; }
     [Parameter] public EventCallback<FlowPr> OnApprove { get; set; }
     [Parameter] public EventCallback<FlowPr> OnMerge { get; set; }
     [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
     [Parameter] public EventCallback<UnifiedFlowRow> OnRowExpanded { get; set; }
+    [Parameter] public EventCallback<UnifiedFlowRow> OnRefreshRow { get; set; }
+    [Parameter] public EventCallback OnCollapsedGroupsChanged { get; set; }
+
+    private async Task ToggleGroup(string groupKey)
+    {
+        if (!CollapsedGroups.Remove(groupKey))
+            CollapsedGroups.Add(groupKey);
+        await OnCollapsedGroupsChanged.InvokeAsync();
+    }
 
     private async Task ToggleRow(UnifiedFlowRow row)
     {
