@@ -79,10 +79,12 @@ public sealed class RpsParser
         static IReadOnlyList<RpsTestEntry>? parseTestEntries(string text)
         {
             // Find section headers and their positions to determine category.
+            // Match only real headers: markdown headings (## ... Regressions) or HTML summaries (<summary>...Improvements</summary>).
             var sections = new List<(int Position, string Category)>();
-            foreach (Match m in Regex.Matches(text, @"(Regression|Broken test|Improvement)", RegexOptions.IgnoreCase))
+            foreach (Match m in Regex.Matches(text, @"(?:^##[^\n]*(Regression|Broken test|Improvement))|(?:<summary>[^<]*(Regression|Broken test|Improvement))", RegexOptions.IgnoreCase | RegexOptions.Multiline))
             {
-                var category = m.Groups[1].Value.ToLowerInvariant() switch
+                var value = (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).ToLowerInvariant();
+                var category = value switch
                 {
                     var s when s.StartsWith("regression") => "Regression",
                     var s when s.StartsWith("broken") => "Broken",
@@ -103,7 +105,8 @@ public sealed class RpsParser
                 return category;
             }
 
-            List<RpsTestEntry>? entries = null;
+            // Collect all table row matches (both markdown and HTML) with their positions.
+            var rows = new List<(int Index, string FirstCell, string SecondCell)>();
 
             // Match data rows in markdown pipe tables (skip header/separator rows).
             foreach (Match row in Regex.Matches(text, @"^\|\s*(.+?)\s*\|\s*(.+?)\s*\|.*\|", RegexOptions.Multiline))
@@ -118,29 +121,31 @@ public sealed class RpsParser
                     continue;
                 }
 
-                addEntry(row.Index, firstCell, secondCell, ref entries);
+                rows.Add((row.Index, firstCell, secondCell));
             }
 
             // Match data rows in HTML tables (<tr><td>...<td>...).
             foreach (Match row in Regex.Matches(text, @"<tr>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.IgnoreCase))
             {
-                var firstCell = row.Groups[1].Value.Trim();
-                var secondCell = row.Groups[2].Value.Trim();
-                addEntry(row.Index, firstCell, secondCell, ref entries);
+                rows.Add((row.Index, row.Groups[1].Value.Trim(), row.Groups[2].Value.Trim()));
             }
 
-            return entries;
+            // Sort by position in the original text to preserve document order.
+            rows.Sort((a, b) => a.Index.CompareTo(b.Index));
 
-            void addEntry(int position, string firstCell, string secondCell, ref List<RpsTestEntry>? entries)
+            List<RpsTestEntry>? entries = null;
+            foreach (var (index, firstCell, secondCell) in rows)
             {
                 var testName = stripHtml(firstCell);
                 var details = stripHtml(secondCell);
                 if (!string.IsNullOrEmpty(testName))
                 {
                     entries ??= new();
-                    entries.Add(new RpsTestEntry(getCategory(position), testName, details));
+                    entries.Add(new RpsTestEntry(getCategory(index), testName, details));
                 }
             }
+
+            return entries;
 
             static string stripHtml(string value)
             {
@@ -344,13 +349,16 @@ public static class RpsExtensions
             }
 
             var sb = new System.Text.StringBuilder();
-            foreach (var group in entries.GroupBy(e => e.Category))
+            // Group by category preserving order of first appearance.
+            string? currentCategory = null;
+            foreach (var entry in entries)
             {
-                sb.Append($"\n[{group.Key}]");
-                foreach (var entry in group)
+                if (entry.Category != currentCategory)
                 {
-                    sb.Append($"\n  - {entry.TestName}: {entry.Details}");
+                    currentCategory = entry.Category;
+                    sb.Append($"\n[{currentCategory}]");
                 }
+                sb.Append($"\n  - {entry.TestName}: {entry.Details}");
             }
             return sb.ToString();
         }

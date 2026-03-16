@@ -1342,6 +1342,50 @@ public class RpsParserTests
             """);
     }
 
+    [Fact]
+    public void HtmlTableRegressions()
+    {
+        Verify(new()
+        {
+            Url = "",
+            Threads = """
+            {
+              "comments": [
+                {
+                  "author": {
+                    "displayName": "DevDiv Build Service (devdiv)"
+                  },
+                  "content": "###We've started **VS64** Perf DDRITs"
+                },
+                {
+                  "author": {
+                    "displayName": "VSEng-PIT-Backend"
+                  },
+                  "content": "## :x: Test Run **FAILED**\r\n> There was 1 regression, please review the results below.\r\n\r\n---\r\n## 🕳 [View Performance Details on PIT](https://example.com)\r\n\r\n---\r\n## :triangular_flag_on_post: Regressions\r\n\r\n<table>\r\n<tr><th>Found in</th><th>Details</th><th>Links</th></tr>\r\n<tr><td> CPlusPlusWithCache.UnrealEngine52<li>0850.Change Solution Configuration - Warm <ul><li><a href=\"https://example.com\" target=\"_blank\">Duration_TotalElapsedTime</a></li></ul></li> </td><td> Regressed: 1,241 ms (26.87%) </td><td> <a href=\"https://example.com\" target=\"_blank\">🕳 View it in PIT</a><br /><a href=\"https://example.com\" target=\"_blank\">📂 Open test outputs</a><br /><a href=\"https://example.com\" target=\"_blank\">📈 Compare in PerfView</a> </td></tr>\r\n</table>\r\n"
+                }
+              ]
+            }
+            """,
+        }, """
+            Ddrit:
+              Regressions: 1
+              BrokenTests: -1
+              Flags: Finished
+              TestEntries:
+                - Category: Regression
+                  TestName: CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime
+                  Details: Regressed: 1,241 ms (26.87%)
+            Display:
+              Short: Build: ?, DDRIT: 1, Speedometer: N/A
+              Long:
+                Build: Unknown
+                DDRIT: Regressions: 1
+                [Regression]
+                  - CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime: Regressed: 1,241 ms (26.87%)
+                Speedometer: Not started
+            """);
+    }
+
     [InlineSnapshotAssertion(parameterName: nameof(expected))]
     private static void Verify(Entry input, string? expected = null, [CallerFilePath] string? filePath = null, [CallerLineNumber] int lineNumber = -1)
     {
