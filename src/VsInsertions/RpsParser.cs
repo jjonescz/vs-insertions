@@ -71,7 +71,82 @@ public sealed class RpsParser
                 regressions = 0;
             }
 
-            return new RpsRun(Regressions: regressions, BrokenTests: brokenTests, Flags: flags);
+            var testEntries = parseTestEntries(latestText);
+
+            return new RpsRun(Regressions: regressions, BrokenTests: brokenTests, Flags: flags, TestEntries: testEntries);
+        }
+
+        static IReadOnlyList<RpsTestEntry>? parseTestEntries(string text)
+        {
+            // Find section headers and their positions to determine category.
+            var sections = new List<(int Position, string Category)>();
+            foreach (Match m in Regex.Matches(text, @"(Regression|Broken test|Improvement)", RegexOptions.IgnoreCase))
+            {
+                var category = m.Groups[1].Value.ToLowerInvariant() switch
+                {
+                    var s when s.StartsWith("regression") => "Regression",
+                    var s when s.StartsWith("broken") => "Broken",
+                    var s when s.StartsWith("improvement") => "Improvement",
+                    _ => "Other",
+                };
+                sections.Add((m.Index, category));
+            }
+
+            string getCategory(int position)
+            {
+                string category = "Other";
+                foreach (var (pos, cat) in sections)
+                {
+                    if (pos > position) break;
+                    category = cat;
+                }
+                return category;
+            }
+
+            List<RpsTestEntry>? entries = null;
+
+            // Match data rows in markdown pipe tables (skip header/separator rows).
+            foreach (Match row in Regex.Matches(text, @"^\|\s*(.+?)\s*\|\s*(.+?)\s*\|.*\|", RegexOptions.Multiline))
+            {
+                var firstCell = row.Groups[1].Value.Trim();
+                var secondCell = row.Groups[2].Value.Trim();
+                // Skip header rows (e.g., "Test", "Found in") and separator rows (e.g., ":----").
+                if (firstCell.StartsWith(':') || firstCell.StartsWith('-') ||
+                    firstCell.Equals("Test", StringComparison.OrdinalIgnoreCase) ||
+                    firstCell.Equals("Found in", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                addEntry(row.Index, firstCell, secondCell, ref entries);
+            }
+
+            // Match data rows in HTML tables (<tr><td>...<td>...).
+            foreach (Match row in Regex.Matches(text, @"<tr>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.IgnoreCase))
+            {
+                var firstCell = row.Groups[1].Value.Trim();
+                var secondCell = row.Groups[2].Value.Trim();
+                addEntry(row.Index, firstCell, secondCell, ref entries);
+            }
+
+            return entries;
+
+            void addEntry(int position, string firstCell, string secondCell, ref List<RpsTestEntry>? entries)
+            {
+                var testName = stripHtml(firstCell);
+                var details = stripHtml(secondCell);
+                if (!string.IsNullOrEmpty(testName))
+                {
+                    entries ??= new();
+                    entries.Add(new RpsTestEntry(getCategory(position), testName, details));
+                }
+            }
+
+            static string stripHtml(string value)
+            {
+                var result = Regex.Replace(value, @"<[^>]+>", " ").Trim();
+                return Regex.Replace(result, @"\s+", " ");
+            }
         }
 
         static int tryGetCount(string text, string label)
@@ -174,7 +249,9 @@ public enum RpsRunFlags
     InfraIssue = 1 << 2,
 }
 
-public sealed record RpsRun(int Regressions, int BrokenTests, RpsRunFlags Flags = RpsRunFlags.None);
+public sealed record RpsTestEntry(string Category, string TestName, string Details);
+
+public sealed record RpsRun(int Regressions, int BrokenTests, RpsRunFlags Flags = RpsRunFlags.None, IReadOnlyList<RpsTestEntry>? TestEntries = null);
 
 public static class RpsExtensions
 {
@@ -248,12 +325,35 @@ public static class RpsExtensions
 
         if (run.BrokenTests is not (0 or -1))
         {
+            var longText = $"Regressions: {regressions}, Broken tests: {run.BrokenTests}";
+            longText += formatTestEntries(run.TestEntries);
             return new(
                 $"{regressions}+{run.BrokenTests}",
-                $"Regressions: {regressions}, Broken tests: {run.BrokenTests}");
+                longText);
         }
 
-        return new(regressions, $"Regressions: {regressions}");
+        var longResult = $"Regressions: {regressions}";
+        longResult += formatTestEntries(run.TestEntries);
+        return new(regressions, longResult);
+
+        static string formatTestEntries(IReadOnlyList<RpsTestEntry>? entries)
+        {
+            if (entries is not { Count: > 0 })
+            {
+                return "";
+            }
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var group in entries.GroupBy(e => e.Category))
+            {
+                sb.Append($"\n[{group.Key}]");
+                foreach (var entry in group)
+                {
+                    sb.Append($"\n  - {entry.TestName}: {entry.Details}");
+                }
+            }
+            return sb.ToString();
+        }
 
         static string numberToString(int num)
         {

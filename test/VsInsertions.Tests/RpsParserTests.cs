@@ -226,12 +226,31 @@ public class RpsParserTests
             Speedometer:
               BrokenTests: 2
               Flags: Finished
+              TestEntries:
+                - Category: Broken
+                  TestName: ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_devenv.Iteration:2
+                  Details: Broken test 1 iteration was broken
+                - Category: Broken
+                  TestName: ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_NonDevenv.Iteration:2
+                  Details: Broken test 1 iteration was broken
+                - Category: Improvement
+                  TestName: FileInteractionPerfTestsAsync.TestFileOpenAndSaveLargeCSFileFromSDKProject 9990.Totals CLR_AdjustedExceptions_Count_Total_NonDevenv
+                  Details: Improved: -9 Count (-24.43%)
+                - Category: Improvement
+                  TestName: FileInteractionPerfTestsAsync.TestFileOpenAndSaveEmptyCSFile 9990.Totals CLR_BytesAllocated_NonDevenv
+                  Details: Improved: -37,537,458 Bytes (-10.18%)
             Display:
               Short: Build: ?, DDRIT: N/A, Speedometer: 0+2
               Long:
                 Build: Unknown
                 DDRIT: Not started
                 Speedometer: Regressions: 0, Broken tests: 2
+                [Broken]
+                  - ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_devenv.Iteration:2: Broken test 1 iteration was broken
+                  - ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_NonDevenv.Iteration:2: Broken test 1 iteration was broken
+                [Improvement]
+                  - FileInteractionPerfTestsAsync.TestFileOpenAndSaveLargeCSFileFromSDKProject 9990.Totals CLR_AdjustedExceptions_Count_Total_NonDevenv: Improved: -9 Count (-24.43%)
+                  - FileInteractionPerfTestsAsync.TestFileOpenAndSaveEmptyCSFile 9990.Totals CLR_BytesAllocated_NonDevenv: Improved: -37,537,458 Bytes (-10.18%)
             """);
     }
 
@@ -1032,6 +1051,10 @@ public class RpsParserTests
               Regressions: 1
               BrokenTests: -1
               Flags: Finished
+              TestEntries:
+                - Category: Regression
+                  TestName: CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime
+                  Details: Regressed: 1,241 ms (26.87%)
             Display:
               Short: Build: ?, DDRIT: N/A, Speedometer-Scoped: 0, Speedometer: 1
               Long:
@@ -1039,6 +1062,8 @@ public class RpsParserTests
                 DDRIT: Not started
                 Speedometer-Scoped: Regressions: 0
                 Speedometer: Regressions: 1
+                [Regression]
+                  - CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime: Regressed: 1,241 ms (26.87%)
             """);
     }
 
