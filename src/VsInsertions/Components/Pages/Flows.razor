@@ -665,6 +665,19 @@ else
 
     private async Task OnRowExpandedAsync(UnifiedFlowRow row)
     {
+        // Refresh PR details on expand.
+        var prsToRefresh = row.Prs.Where(p => p.DetailsLoaded).ToList();
+        if (prsToRefresh.Count > 0)
+        {
+            foreach (var pr in prsToRefresh)
+            {
+                pr.DetailsLoaded = false;
+                pr.AnnotationsLoaded = false;
+            }
+            await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, prsToRefresh);
+            StateHasChanged();
+        }
+
         var prsToLoad = row.Prs
             .Where(p => p.DetailsLoaded && !p.AnnotationsLoaded
                 && p.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
