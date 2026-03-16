@@ -175,12 +175,15 @@ else
                       PrError="@prError"
                       OutgoingPrError="@outgoingPrError"
                       ExpandedRows="expandedRows"
+                      CollapsedGroups="collapsedGroups"
+                      CurrentRepo="@currentRepo"
                       ActionInProgressPr="actionInProgressPr"
                       ActionType="@actionType"
                       OnApprove="ApproveAsync"
                       OnMerge="MergeAsync"
                       OnRetryCi="RetryCiAsync"
-                      OnRowExpanded="OnRowExpandedAsync" />
+                      OnRowExpanded="OnRowExpandedAsync"
+                      OnCollapsedGroupsChanged="SaveCollapsedGroupsAsync" />
 }
 
 
@@ -188,10 +191,12 @@ else
     // === State ===
     private bool browser;
     private HashSet<string> favoriteRepos = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> collapsedGroups = new(StringComparer.OrdinalIgnoreCase);
     private List<string> recentRepos = [];
     private const int MaxRecentRepos = 5;
     private const string FavoriteReposCookieName = "flows_favorite_repos";
     private const string RecentReposCookieName = "flows_recent_repos";
+    private const string CollapsedGroupsCookieName = "flows_collapsed_groups";
     private string? adoAccessToken;
     private string? gitHubToken;
     private string? gitHubUser;
@@ -290,6 +295,7 @@ else
 
             await ReadFavoriteReposAsync();
             await ReadRecentReposAsync();
+            await ReadCollapsedGroupsAsync();
 
             browser = true;
             StateHasChanged();
@@ -739,6 +745,23 @@ else
     {
         var value = string.Join(",", recentRepos);
         await JSRuntime.InvokeVoidAsync("setCookie", RecentReposCookieName, value);
+    }
+
+    private async Task ReadCollapsedGroupsAsync()
+    {
+        var value = await JSRuntime.InvokeAsync<string>("getCookie", CollapsedGroupsCookieName);
+        if (!string.IsNullOrEmpty(value))
+        {
+            collapsedGroups = new HashSet<string>(
+                value.Split(',', StringSplitOptions.RemoveEmptyEntries),
+                StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private async Task SaveCollapsedGroupsAsync()
+    {
+        var value = string.Join(",", collapsedGroups);
+        await JSRuntime.InvokeVoidAsync("setCookie", CollapsedGroupsCookieName, value);
     }
 
     private bool IsFavorite(string? repo) =>
