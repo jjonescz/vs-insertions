@@ -183,6 +183,7 @@ else
                       OnMerge="MergeAsync"
                       OnRetryCi="RetryCiAsync"
                       OnRowExpanded="OnRowExpandedAsync"
+                      OnRefreshRow="RefreshRowAsync"
                       OnCollapsedGroupsChanged="SaveCollapsedGroupsAsync" />
 }
 
@@ -671,19 +672,24 @@ else
 
     private async Task OnRowExpandedAsync(UnifiedFlowRow row)
     {
-        // Refresh PR details on expand.
-        var prsToRefresh = row.Prs.Where(p => p.DetailsLoaded).ToList();
-        if (prsToRefresh.Count > 0)
-        {
-            foreach (var pr in prsToRefresh)
-            {
-                pr.DetailsLoaded = false;
-                pr.AnnotationsLoaded = false;
-            }
-            await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, prsToRefresh);
-            StateHasChanged();
-        }
+        await LoadAnnotationsAsync(row);
+    }
 
+    private async Task RefreshRowAsync(UnifiedFlowRow row)
+    {
+        foreach (var pr in row.Prs)
+        {
+            pr.DetailsLoaded = false;
+            pr.AnnotationsLoaded = false;
+        }
+        StateHasChanged();
+        await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, row.Prs);
+        StateHasChanged();
+        await LoadAnnotationsAsync(row);
+    }
+
+    private async Task LoadAnnotationsAsync(UnifiedFlowRow row)
+    {
         var prsToLoad = row.Prs
             .Where(p => p.DetailsLoaded && !p.AnnotationsLoaded
                 && p.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true)
@@ -692,10 +698,8 @@ else
         if (prsToLoad.Count == 0)
             return;
 
-        var tasks = prsToLoad.Select(pr =>
-            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr));
-
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(prsToLoad.Select(pr =>
+            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr)));
         StateHasChanged();
     }
 

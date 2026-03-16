@@ -268,6 +268,11 @@ else
                         <tr>
                             <td colspan="@totalCols">
                                 <div class="p-2" style="background-color: #f8f9fa;">
+                                    <div class="d-flex justify-content-end mb-1">
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => OnRefreshRow.InvokeAsync(row)" title="Refresh PR details">
+                                            ↻ Refresh
+                                        </button>
+                                    </div>
                                     @if (row.Subscription?.Id != null)
                                     {
                                         <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
@@ -427,6 +432,7 @@ else
     [Parameter] public EventCallback<FlowPr> OnMerge { get; set; }
     [Parameter] public EventCallback<FlowPr> OnRetryCi { get; set; }
     [Parameter] public EventCallback<UnifiedFlowRow> OnRowExpanded { get; set; }
+    [Parameter] public EventCallback<UnifiedFlowRow> OnRefreshRow { get; set; }
     [Parameter] public EventCallback OnCollapsedGroupsChanged { get; set; }
 
     private async Task ToggleGroup(string groupKey)
