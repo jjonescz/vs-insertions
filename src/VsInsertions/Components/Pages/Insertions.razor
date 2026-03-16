@@ -348,9 +348,13 @@ else
 
     private void AutoLoadRps()
     {
-        if (insertions != null && !insertions.Where(ShouldDisplayInsertion).Any(i => i.RpsSummary is not null))
+        if (insertions != null)
         {
-            LoadRps(numberOfRecentRpsToLoad);
+            var visible = insertions.Where(ShouldDisplayInsertion);
+            if (visible.Any() && !visible.Any(i => i.RpsSummary is not null))
+            {
+                LoadRps(numberOfRecentRpsToLoad);
+            }
         }
     }
 
