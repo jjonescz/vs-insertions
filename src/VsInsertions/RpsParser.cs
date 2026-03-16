@@ -71,7 +71,87 @@ public sealed class RpsParser
                 regressions = 0;
             }
 
-            return new RpsRun(Regressions: regressions, BrokenTests: brokenTests, Flags: flags);
+            var testEntries = parseTestEntries(latestText);
+
+            return new RpsRun(Regressions: regressions, BrokenTests: brokenTests, Flags: flags, TestEntries: testEntries);
+        }
+
+        static IReadOnlyList<RpsTestEntry>? parseTestEntries(string text)
+        {
+            // Find section headers and their positions to determine category.
+            // Match only real headers: markdown headings (## ... Regressions) or HTML summaries (<summary>...Improvements</summary>).
+            var sections = new List<(int Position, string Category)>();
+            foreach (Match m in Regex.Matches(text, @"(?:^##[^\n]*(Regression|Broken test|Improvement))|(?:<summary>[^<]*(Regression|Broken test|Improvement))", RegexOptions.IgnoreCase | RegexOptions.Multiline))
+            {
+                var value = (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).ToLowerInvariant();
+                var category = value switch
+                {
+                    var s when s.StartsWith("regression") => "Regression",
+                    var s when s.StartsWith("broken") => "Broken",
+                    var s when s.StartsWith("improvement") => "Improvement",
+                    _ => "Other",
+                };
+                sections.Add((m.Index, category));
+            }
+
+            string getCategory(int position)
+            {
+                string category = "Other";
+                foreach (var (pos, cat) in sections)
+                {
+                    if (pos > position) break;
+                    category = cat;
+                }
+                return category;
+            }
+
+            // Collect all table row matches (both markdown and HTML) with their positions.
+            var rows = new List<(int Index, string FirstCell, string SecondCell)>();
+
+            // Match data rows in markdown pipe tables (skip header/separator rows).
+            foreach (Match row in Regex.Matches(text, @"^\|\s*(.+?)\s*\|\s*(.+?)\s*\|.*\|", RegexOptions.Multiline))
+            {
+                var firstCell = row.Groups[1].Value.Trim();
+                var secondCell = row.Groups[2].Value.Trim();
+                // Skip header rows (e.g., "Test", "Found in") and separator rows (e.g., ":----").
+                if (firstCell.StartsWith(':') || firstCell.StartsWith('-') ||
+                    firstCell.Equals("Test", StringComparison.OrdinalIgnoreCase) ||
+                    firstCell.Equals("Found in", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                rows.Add((row.Index, firstCell, secondCell));
+            }
+
+            // Match data rows in HTML tables (<tr><td>...<td>...).
+            foreach (Match row in Regex.Matches(text, @"<tr>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.IgnoreCase))
+            {
+                rows.Add((row.Index, row.Groups[1].Value.Trim(), row.Groups[2].Value.Trim()));
+            }
+
+            // Sort by position in the original text to preserve document order.
+            rows.Sort((a, b) => a.Index.CompareTo(b.Index));
+
+            List<RpsTestEntry>? entries = null;
+            foreach (var (index, firstCell, secondCell) in rows)
+            {
+                var testName = stripHtml(firstCell);
+                var details = stripHtml(secondCell);
+                if (!string.IsNullOrEmpty(testName))
+                {
+                    entries ??= new();
+                    entries.Add(new RpsTestEntry(getCategory(index), testName, details));
+                }
+            }
+
+            return entries;
+
+            static string stripHtml(string value)
+            {
+                var result = Regex.Replace(value, @"<[^>]+>", " ").Trim();
+                return Regex.Replace(result, @"\s+", " ");
+            }
         }
 
         static int tryGetCount(string text, string label)
@@ -174,7 +254,9 @@ public enum RpsRunFlags
     InfraIssue = 1 << 2,
 }
 
-public sealed record RpsRun(int Regressions, int BrokenTests, RpsRunFlags Flags = RpsRunFlags.None);
+public sealed record RpsTestEntry(string Category, string TestName, string Details);
+
+public sealed record RpsRun(int Regressions, int BrokenTests, RpsRunFlags Flags = RpsRunFlags.None, IReadOnlyList<RpsTestEntry>? TestEntries = null);
 
 public static class RpsExtensions
 {
@@ -248,12 +330,38 @@ public static class RpsExtensions
 
         if (run.BrokenTests is not (0 or -1))
         {
+            var longText = $"Regressions: {regressions}, Broken tests: {run.BrokenTests}";
+            longText += formatTestEntries(run.TestEntries);
             return new(
                 $"{regressions}+{run.BrokenTests}",
-                $"Regressions: {regressions}, Broken tests: {run.BrokenTests}");
+                longText);
         }
 
-        return new(regressions, $"Regressions: {regressions}");
+        var longResult = $"Regressions: {regressions}";
+        longResult += formatTestEntries(run.TestEntries);
+        return new(regressions, longResult);
+
+        static string formatTestEntries(IReadOnlyList<RpsTestEntry>? entries)
+        {
+            if (entries is not { Count: > 0 })
+            {
+                return "";
+            }
+
+            var sb = new System.Text.StringBuilder();
+            // Group by category preserving order of first appearance.
+            string? currentCategory = null;
+            foreach (var entry in entries)
+            {
+                if (entry.Category != currentCategory)
+                {
+                    currentCategory = entry.Category;
+                    sb.Append($"\n[{currentCategory}]");
+                }
+                sb.Append($"\n  - {entry.TestName}: {entry.Details}");
+            }
+            return sb.ToString();
+        }
 
         static string numberToString(int num)
         {

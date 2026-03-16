@@ -226,12 +226,31 @@ public class RpsParserTests
             Speedometer:
               BrokenTests: 2
               Flags: Finished
+              TestEntries:
+                - Category: Broken
+                  TestName: ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_devenv.Iteration:2
+                  Details: Broken test 1 iteration was broken
+                - Category: Broken
+                  TestName: ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_NonDevenv.Iteration:2
+                  Details: Broken test 1 iteration was broken
+                - Category: Improvement
+                  TestName: FileInteractionPerfTestsAsync.TestFileOpenAndSaveLargeCSFileFromSDKProject 9990.Totals CLR_AdjustedExceptions_Count_Total_NonDevenv
+                  Details: Improved: -9 Count (-24.43%)
+                - Category: Improvement
+                  TestName: FileInteractionPerfTestsAsync.TestFileOpenAndSaveEmptyCSFile 9990.Totals CLR_BytesAllocated_NonDevenv
+                  Details: Improved: -37,537,458 Bytes (-10.18%)
             Display:
               Short: Build: ?, DDRIT: N/A, Speedometer: 0+2
               Long:
                 Build: Unknown
                 DDRIT: Not started
                 Speedometer: Regressions: 0, Broken tests: 2
+                [Broken]
+                  - ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_devenv.Iteration:2: Broken test 1 iteration was broken
+                  - ProjectSystemTest.OrchardCoreBuild.9990.Totals.CLR_AdjustedExceptions_Count_Total_NonDevenv.Iteration:2: Broken test 1 iteration was broken
+                [Improvement]
+                  - FileInteractionPerfTestsAsync.TestFileOpenAndSaveLargeCSFileFromSDKProject 9990.Totals CLR_AdjustedExceptions_Count_Total_NonDevenv: Improved: -9 Count (-24.43%)
+                  - FileInteractionPerfTestsAsync.TestFileOpenAndSaveEmptyCSFile 9990.Totals CLR_BytesAllocated_NonDevenv: Improved: -37,537,458 Bytes (-10.18%)
             """);
     }
 
@@ -1032,6 +1051,10 @@ public class RpsParserTests
               Regressions: 1
               BrokenTests: -1
               Flags: Finished
+              TestEntries:
+                - Category: Regression
+                  TestName: CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime
+                  Details: Regressed: 1,241 ms (26.87%)
             Display:
               Short: Build: ?, DDRIT: N/A, Speedometer-Scoped: 0, Speedometer: 1
               Long:
@@ -1039,6 +1062,8 @@ public class RpsParserTests
                 DDRIT: Not started
                 Speedometer-Scoped: Regressions: 0
                 Speedometer: Regressions: 1
+                [Regression]
+                  - CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime: Regressed: 1,241 ms (26.87%)
             """);
     }
 
@@ -1313,6 +1338,50 @@ public class RpsParserTests
                 C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\System.AppContext.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7...
                 C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.AppXPackage.Targets(1468,5): Error MSB3816: Loading assembly "C:\Users\cloudtest\.nuget\packages\runtime.win10-x86.microsoft.netcore.universalwindowsplatform\6.2.14\runtimes\win10-x86\lib\uap10.0.15138\System.Buffers.dll" failed. System.IO.FileNotFoundException: Could not load file or assembly 'System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798...
                 DDRIT: Not started
+                Speedometer: Not started
+            """);
+    }
+
+    [Fact]
+    public void HtmlTableRegressions()
+    {
+        Verify(new()
+        {
+            Url = "",
+            Threads = """
+            {
+              "comments": [
+                {
+                  "author": {
+                    "displayName": "DevDiv Build Service (devdiv)"
+                  },
+                  "content": "###We've started **VS64** Perf DDRITs"
+                },
+                {
+                  "author": {
+                    "displayName": "VSEng-PIT-Backend"
+                  },
+                  "content": "## :x: Test Run **FAILED**\r\n> There was 1 regression, please review the results below.\r\n\r\n---\r\n## 🕳 [View Performance Details on PIT](https://example.com)\r\n\r\n---\r\n## :triangular_flag_on_post: Regressions\r\n\r\n<table>\r\n<tr><th>Found in</th><th>Details</th><th>Links</th></tr>\r\n<tr><td> CPlusPlusWithCache.UnrealEngine52<li>0850.Change Solution Configuration - Warm <ul><li><a href=\"https://example.com\" target=\"_blank\">Duration_TotalElapsedTime</a></li></ul></li> </td><td> Regressed: 1,241 ms (26.87%) </td><td> <a href=\"https://example.com\" target=\"_blank\">🕳 View it in PIT</a><br /><a href=\"https://example.com\" target=\"_blank\">📂 Open test outputs</a><br /><a href=\"https://example.com\" target=\"_blank\">📈 Compare in PerfView</a> </td></tr>\r\n</table>\r\n"
+                }
+              ]
+            }
+            """,
+        }, """
+            Ddrit:
+              Regressions: 1
+              BrokenTests: -1
+              Flags: Finished
+              TestEntries:
+                - Category: Regression
+                  TestName: CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime
+                  Details: Regressed: 1,241 ms (26.87%)
+            Display:
+              Short: Build: ?, DDRIT: 1, Speedometer: N/A
+              Long:
+                Build: Unknown
+                DDRIT: Regressions: 1
+                [Regression]
+                  - CPlusPlusWithCache.UnrealEngine52 0850.Change Solution Configuration - Warm Duration_TotalElapsedTime: Regressed: 1,241 ms (26.87%)
                 Speedometer: Not started
             """);
     }
