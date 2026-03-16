@@ -187,6 +187,8 @@ else
                       OnCollapsedGroupsChanged="SaveCollapsedGroupsAsync" />
 }
 
+@* Extra space so expanding/collapsing rows near the bottom doesn't cause scroll jumps. *@
+<div style="height: 100vh;"></div>
 
 @code {
     // === State ===
