@@ -349,7 +349,7 @@ else
                                                                 @check.Name
                                                             }
                                                             @(" ")
-                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status)@(check.Duration is { } dur ? $", {FormatDuration(dur)}" : ""))</small>
+                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status)@(check.Duration is { } dur ? $", {FormatDuration(dur)}" : check.Status == "in_progress" && check.StartedAt is { } started ? $", running {FormatDuration(DateTimeOffset.UtcNow - started)}" : ""))</small>
                                                             @if (!string.IsNullOrEmpty(check.Title))
                                                             {
                                                                 <small class="text-muted"> — @check.Title</small>
@@ -573,21 +573,36 @@ else
         if (pr.CheckRuns is not { Count: > 0 })
             return "Click to expand/collapse details";
 
+        var lines = new List<string>();
+
+        var inProgress = pr.CheckRuns
+            .Where(c => c.Conclusion is null && c.Status is "in_progress")
+            .ToList();
+        foreach (var c in inProgress)
+        {
+            var line = $"🔄 {c.Name}";
+            if (c.StartedAt is { } started)
+            {
+                var elapsed = DateTimeOffset.UtcNow - started;
+                line += $" (running {FormatDuration(elapsed)})";
+            }
+            lines.Add(line);
+        }
+
         var failed = pr.CheckRuns
             .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out")
             .ToList();
-        if (failed.Count == 0)
-            return "Click to expand/collapse details";
-
-        return string.Join("\n", failed.Select(c =>
+        foreach (var c in failed)
         {
             var line = $"✘ {c.Name}";
             if (c.Duration is { } dur)
                 line += $" ({FormatDuration(dur)})";
             if (!string.IsNullOrEmpty(c.Title))
                 line += $" — {c.Title}";
-            return line;
-        }));
+            lines.Add(line);
+        }
+
+        return lines.Count > 0 ? string.Join("\n", lines) : "Click to expand/collapse details";
     }
 
     private static string FormatDuration(TimeSpan duration)
