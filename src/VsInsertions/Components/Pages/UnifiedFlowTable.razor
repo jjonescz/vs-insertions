@@ -120,6 +120,10 @@ else
                                 <td>
                                     <span title="@PrStateTooltip(primaryPr)">@PrStateEmoji(primaryPr)</span>
                                     <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
+                                    @if (primaryPr.Mergeable == false)
+                                    {
+                                        <span class="ms-1" title="Merge conflicts">⛔</span>
+                                    }
                                     @if (row.Prs.Count > 1)
                                     {
                                         <span class="badge bg-secondary ms-1" style="cursor: pointer;"
@@ -284,6 +288,10 @@ else
                                             <div class="d-flex align-items-center gap-2 mb-1">
                                                 <h6 class="mb-0">
                                                     <a href="@pr.Url" target="_blank">#@pr.Number</a>
+                                                    @if (pr.Mergeable == false)
+                                                    {
+                                                        <span class="ms-1" title="Merge conflicts">⛔</span>
+                                                    }
                                                 </h6>
                                                 @if (pr != primaryPr && pr.State == "open" && !pr.Merged)
                                                 {
