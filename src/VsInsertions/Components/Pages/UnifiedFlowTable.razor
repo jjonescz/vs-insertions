@@ -96,7 +96,7 @@ else
                             }
                             @if (stuck)
                             {
-                                <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) (frequency: @row.Subscription?.UpdateFrequency)">⚠️</span>
+                                <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) @(row.Subscription?.UpdateFrequency is { } freq ? $"(frequency: {freq})" : "")">⚠️</span>
                             }
                         </td>
 
@@ -506,29 +506,34 @@ else
         _ => null,
     };
 
+    private static readonly TimeSpan DefaultOpenPrThreshold = TimeSpan.FromDays(7);
+
     /// <summary>Checks if a subscription row might be stuck (no open PR and last PR is older than expected, or open PR lingering too long).</summary>
     private static bool IsStuck(UnifiedFlowRow row, out TimeSpan overdue, out string stuckMessage)
     {
         overdue = default;
         stuckMessage = "";
-        if (row.Subscription is not { Enabled: true }) return false;
 
-        var threshold = GetFrequencyThreshold(row.Subscription.UpdateFrequency);
-        if (threshold is null) return false;
+        var hasSubscription = row.Subscription is { Enabled: true };
+        var threshold = hasSubscription ? GetFrequencyThreshold(row.Subscription!.UpdateFrequency) : null;
 
         // Check if there's an open PR that's been open for too long.
         var openPr = row.Prs.Where(p => p.State == "open").OrderBy(p => p.CreatedAt).FirstOrDefault();
         if (openPr != null)
         {
+            var openThreshold = threshold ?? DefaultOpenPrThreshold;
             var elapsed = DateTimeOffset.UtcNow - openPr.CreatedAt;
-            if (elapsed > threshold.Value)
+            if (elapsed > openThreshold)
             {
-                overdue = elapsed - threshold.Value;
+                overdue = elapsed - openThreshold;
                 stuckMessage = "PR open for a long time";
                 return true;
             }
             return false;
         }
+
+        // The remaining check (no open PR) only applies to rows with a subscription.
+        if (!hasSubscription || threshold is null) return false;
 
         // Use the most recent closed/merged PR's UpdatedAt as the reference point.
         var lastPr = row.Prs.OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt).FirstOrDefault();
