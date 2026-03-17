@@ -26,8 +26,8 @@ else
             <tr>
                 <th></th>
                 <th>Channel</th>
-                <th>Source Branch</th>
-                <th>Target Branch</th>
+                <th>Branch</th>
+                <th>Other Branch</th>
                 @if (PrsAvailable)
                 {
                     <th>PR</th>
@@ -71,7 +71,10 @@ else
 
                 @if (isGroupCollapsed) { continue; }
 
-                @foreach (var row in group.OrderBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
+                @foreach (var row in group
+                    .OrderBy(r => GetOtherRepoBranch(r), StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(r => IsCircular(r) ? 0 : r.IsIncoming ? 1 : 2)
+                    .ThenBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
@@ -105,11 +108,11 @@ else
                             @(row.Subscription?.Channel ?? "—")
                         </td>
 
-                        @* Source Branch *@
-                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.SourceBranch ?? "—")</code></td>
+                        @* Selected repo branch *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(GetSelectedRepoBranch(row, primaryPr) ?? "—")</code></td>
 
-                        @* Target Branch *@
-                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
+                        @* Other repo branch *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(GetOtherRepoBranch(row, primaryPr) ?? "—")</code></td>
 
 
                         @if (PrsAvailable)
@@ -489,6 +492,18 @@ else
         "DISMISSED" => "gray",
         _ => "lightgray",
     };
+
+    /// <summary>The branch on the selected repo's side.</summary>
+    private static string? GetSelectedRepoBranch(UnifiedFlowRow row, FlowPr? primaryPr) =>
+        row.IsIncoming
+            ? (row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch)
+            : row.SourceBranch;
+
+    /// <summary>The branch on the other repo's side (for pairing forward/backward flows).</summary>
+    private static string? GetOtherRepoBranch(UnifiedFlowRow row, FlowPr? primaryPr = null) =>
+        row.IsIncoming
+            ? row.SourceBranch
+            : (row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch);
 
     private static bool IsCircular(UnifiedFlowRow row) =>
         row.IsSameRepo ||
