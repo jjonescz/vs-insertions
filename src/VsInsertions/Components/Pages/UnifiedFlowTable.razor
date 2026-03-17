@@ -77,7 +77,7 @@ else
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
                     var isEnabled = row.Subscription?.Enabled ?? true;
                     var enabledSuffix = isEnabled ? "" : " (disabled)";
-                    var stuck = IsStuck(row, out var overdueTime);
+                    var stuck = IsStuck(row, out var overdueTime, out var stuckMessage);
 
                     <tr>
                         @* Direction *@
@@ -96,7 +96,7 @@ else
                             }
                             @if (stuck)
                             {
-                                <span class="ms-1" title="Possibly stuck — @FormatOverdue(overdueTime) (frequency: @row.Subscription?.UpdateFrequency)">⚠️</span>
+                                <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) (frequency: @row.Subscription?.UpdateFrequency)">⚠️</span>
                             }
                         </td>
 
@@ -506,27 +506,40 @@ else
         _ => null,
     };
 
-    /// <summary>Checks if a subscription row might be stuck (no open PR and last PR is older than expected).</summary>
-    private static bool IsStuck(UnifiedFlowRow row, out TimeSpan overdue)
+    /// <summary>Checks if a subscription row might be stuck (no open PR and last PR is older than expected, or open PR lingering too long).</summary>
+    private static bool IsStuck(UnifiedFlowRow row, out TimeSpan overdue, out string stuckMessage)
     {
         overdue = default;
+        stuckMessage = "";
         if (row.Subscription is not { Enabled: true }) return false;
 
         var threshold = GetFrequencyThreshold(row.Subscription.UpdateFrequency);
         if (threshold is null) return false;
 
-        // Not stuck if there's an open PR.
-        if (row.Prs.Any(p => p.State == "open")) return false;
+        // Check if there's an open PR that's been open for too long.
+        var openPr = row.Prs.Where(p => p.State == "open").OrderBy(p => p.CreatedAt).FirstOrDefault();
+        if (openPr != null)
+        {
+            var elapsed = DateTimeOffset.UtcNow - openPr.CreatedAt;
+            if (elapsed > threshold.Value)
+            {
+                overdue = elapsed - threshold.Value;
+                stuckMessage = "PR open for a long time";
+                return true;
+            }
+            return false;
+        }
 
         // Use the most recent closed/merged PR's UpdatedAt as the reference point.
         var lastPr = row.Prs.OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt).FirstOrDefault();
         var lastDate = lastPr?.UpdatedAt ?? lastPr?.CreatedAt;
         if (lastDate is null) return false;
 
-        var elapsed = DateTimeOffset.UtcNow - lastDate.Value;
-        if (elapsed > threshold.Value)
+        var elapsed2 = DateTimeOffset.UtcNow - lastDate.Value;
+        if (elapsed2 > threshold.Value)
         {
-            overdue = elapsed - threshold.Value;
+            overdue = elapsed2 - threshold.Value;
+            stuckMessage = "Possibly stuck";
             return true;
         }
         return false;
