@@ -341,7 +341,7 @@ else
                                                                 @check.Name
                                                             }
                                                             @(" ")
-                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status)@(check.Duration is { } dur ? $", {FormatDuration(dur)}" : ""))</small>
                                                             @if (!string.IsNullOrEmpty(check.Title))
                                                             {
                                                                 <small class="text-muted"> — @check.Title</small>
@@ -556,9 +556,20 @@ else
         return string.Join("\n", failed.Select(c =>
         {
             var line = $"✘ {c.Name}";
+            if (c.Duration is { } dur)
+                line += $" ({FormatDuration(dur)})";
             if (!string.IsNullOrEmpty(c.Title))
                 line += $" — {c.Title}";
             return line;
         }));
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        if (duration.TotalMinutes >= 1)
+            return $"{(int)duration.TotalMinutes}m {duration.Seconds}s";
+        return $"{(int)duration.TotalSeconds}s";
     }
 }

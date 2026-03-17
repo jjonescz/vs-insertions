@@ -92,7 +92,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             headRefOid headRefName baseRefName merged mergeable
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
-                ... on CheckRun { id databaseId name status conclusion detailsUrl title }
+                ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
             } } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
@@ -300,6 +300,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 Conclusion = c["conclusion"]?.ToString()?.ToLowerInvariant(),
                 Url = c["detailsUrl"]?.ToString(),
                 Title = c["title"]?.ToString(),
+                StartedAt = c["startedAt"] is { } sa ? sa.GetValue<DateTimeOffset>() : null,
+                CompletedAt = c["completedAt"] is { } ca ? ca.GetValue<DateTimeOffset>() : null,
             })
             .ToList() ?? [];
 
@@ -794,7 +796,13 @@ public sealed class CheckRunInfo
     public string? Conclusion { get; set; } // success, failure, cancelled, timed_out, etc.
     public string? Url { get; set; }
     public string? Title { get; set; } // output title (e.g., "1 test(s) failed")
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
     public List<CheckAnnotation> Annotations { get; set; } = [];
+
+    public TimeSpan? Duration => StartedAt.HasValue && CompletedAt.HasValue
+        ? CompletedAt.Value - StartedAt.Value
+        : null;
 }
 
 public sealed class CheckAnnotation
