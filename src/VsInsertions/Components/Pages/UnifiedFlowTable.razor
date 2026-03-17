@@ -555,10 +555,10 @@ else
         var lastDate = lastPr?.UpdatedAt ?? lastPr?.CreatedAt;
         if (lastDate is null) return false;
 
-        var elapsed2 = DateTimeOffset.UtcNow - lastDate.Value;
-        if (elapsed2 > threshold.Value)
+        var elapsedSinceLastPr = DateTimeOffset.UtcNow - lastDate.Value;
+        if (elapsedSinceLastPr > threshold.Value)
         {
-            overdue = elapsed2 - threshold.Value;
+            overdue = elapsedSinceLastPr - threshold.Value;
             stuckMessage = "Possibly stuck";
             return true;
         }
