@@ -26,8 +26,8 @@ else
             <tr>
                 <th></th>
                 <th>Channel</th>
-                <th>Source Branch</th>
-                <th>Target Branch</th>
+                <th>Branch</th>
+                <th>Other Branch</th>
                 @if (PrsAvailable)
                 {
                     <th>PR</th>
@@ -71,13 +71,16 @@ else
 
                 @if (isGroupCollapsed) { continue; }
 
-                @foreach (var row in group.OrderBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
+                @foreach (var row in group
+                    .OrderBy(r => GetOtherRepoBranch(r), StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(r => IsCircular(r) ? 0 : r.IsIncoming ? 1 : 2)
+                    .ThenBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase))
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
                     var isEnabled = row.Subscription?.Enabled ?? true;
                     var enabledSuffix = isEnabled ? "" : " (disabled)";
-                    var stuck = IsStuck(row, out var overdueTime);
+                    var stuck = IsStuck(row, out var overdueTime, out var stuckMessage);
 
                     <tr>
                         @* Direction *@
@@ -96,7 +99,7 @@ else
                             }
                             @if (stuck)
                             {
-                                <span class="ms-1" title="Possibly stuck — @FormatOverdue(overdueTime) (frequency: @row.Subscription?.UpdateFrequency)">⚠️</span>
+                                <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) @(row.Subscription?.UpdateFrequency is { } freq ? $"(frequency: {freq})" : "")">⚠️</span>
                             }
                         </td>
 
@@ -105,11 +108,11 @@ else
                             @(row.Subscription?.Channel ?? "—")
                         </td>
 
-                        @* Source Branch *@
-                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.SourceBranch ?? "—")</code></td>
+                        @* Selected repo branch *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(GetSelectedRepoBranch(row, primaryPr) ?? "—")</code></td>
 
-                        @* Target Branch *@
-                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch ?? "—")</code></td>
+                        @* Other repo branch *@
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details"><code>@(GetOtherRepoBranch(row, primaryPr) ?? "—")</code></td>
 
 
                         @if (PrsAvailable)
@@ -120,6 +123,10 @@ else
                                 <td>
                                     <span title="@PrStateTooltip(primaryPr)">@PrStateEmoji(primaryPr)</span>
                                     <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
+                                    @if (primaryPr.Mergeable == false)
+                                    {
+                                        <span class="ms-1" title="Merge conflicts">⛔</span>
+                                    }
                                     @if (row.Prs.Count > 1)
                                     {
                                         <span class="badge bg-secondary ms-1" style="cursor: pointer;"
@@ -284,6 +291,10 @@ else
                                             <div class="d-flex align-items-center gap-2 mb-1">
                                                 <h6 class="mb-0">
                                                     <a href="@pr.Url" target="_blank">#@pr.Number</a>
+                                                    @if (pr.Mergeable == false)
+                                                    {
+                                                        <span class="ms-1" title="Merge conflicts">⛔</span>
+                                                    }
                                                 </h6>
                                                 @if (pr != primaryPr && pr.State == "open" && !pr.Merged)
                                                 {
@@ -341,7 +352,7 @@ else
                                                                 @check.Name
                                                             }
                                                             @(" ")
-                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status))</small>
+                                                            <small class="text-muted">(@(check.Conclusion ?? check.Status)@(check.Duration is { } dur ? $", {FormatDuration(dur)}" : check.Status == "in_progress" && check.StartedAt is { } started ? $", running {FormatDuration(DateTimeOffset.UtcNow - started)}" : ""))</small>
                                                             @if (!string.IsNullOrEmpty(check.Title))
                                                             {
                                                                 <small class="text-muted"> — @check.Title</small>
@@ -482,6 +493,18 @@ else
         _ => "lightgray",
     };
 
+    /// <summary>The branch on the selected repo's side.</summary>
+    private static string? GetSelectedRepoBranch(UnifiedFlowRow row, FlowPr? primaryPr) =>
+        row.IsIncoming
+            ? (row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch)
+            : row.SourceBranch;
+
+    /// <summary>The branch on the other repo's side (for pairing forward/backward flows).</summary>
+    private static string? GetOtherRepoBranch(UnifiedFlowRow row, FlowPr? primaryPr = null) =>
+        row.IsIncoming
+            ? row.SourceBranch
+            : (row.Subscription?.TargetBranch ?? primaryPr?.TargetBranch);
+
     private static bool IsCircular(UnifiedFlowRow row) =>
         row.IsSameRepo ||
         (row.Subscription != null &&
@@ -498,27 +521,45 @@ else
         _ => null,
     };
 
-    /// <summary>Checks if a subscription row might be stuck (no open PR and last PR is older than expected).</summary>
-    private static bool IsStuck(UnifiedFlowRow row, out TimeSpan overdue)
+    private static readonly TimeSpan DefaultOpenPrThreshold = TimeSpan.FromDays(7);
+
+    /// <summary>Checks if a subscription row might be stuck (no open PR and last PR is older than expected, or open PR lingering too long).</summary>
+    private static bool IsStuck(UnifiedFlowRow row, out TimeSpan overdue, out string stuckMessage)
     {
         overdue = default;
-        if (row.Subscription is not { Enabled: true }) return false;
+        stuckMessage = "";
 
-        var threshold = GetFrequencyThreshold(row.Subscription.UpdateFrequency);
-        if (threshold is null) return false;
+        var hasSubscription = row.Subscription is { Enabled: true };
+        var threshold = hasSubscription ? GetFrequencyThreshold(row.Subscription!.UpdateFrequency) : null;
 
-        // Not stuck if there's an open PR.
-        if (row.Prs.Any(p => p.State == "open")) return false;
+        // Check if there's an open PR that's been open for too long.
+        var openPr = row.Prs.Where(p => p.State == "open").OrderBy(p => p.CreatedAt).FirstOrDefault();
+        if (openPr != null)
+        {
+            var openThreshold = threshold ?? DefaultOpenPrThreshold;
+            var elapsed = DateTimeOffset.UtcNow - openPr.CreatedAt;
+            if (elapsed > openThreshold)
+            {
+                overdue = elapsed - openThreshold;
+                stuckMessage = "PR open for a long time";
+                return true;
+            }
+            return false;
+        }
+
+        // The remaining check (no open PR) only applies to rows with a subscription.
+        if (!hasSubscription || threshold is null) return false;
 
         // Use the most recent closed/merged PR's UpdatedAt as the reference point.
         var lastPr = row.Prs.OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt).FirstOrDefault();
         var lastDate = lastPr?.UpdatedAt ?? lastPr?.CreatedAt;
         if (lastDate is null) return false;
 
-        var elapsed = DateTimeOffset.UtcNow - lastDate.Value;
-        if (elapsed > threshold.Value)
+        var elapsedSinceLastPr = DateTimeOffset.UtcNow - lastDate.Value;
+        if (elapsedSinceLastPr > threshold.Value)
         {
-            overdue = elapsed - threshold.Value;
+            overdue = elapsedSinceLastPr - threshold.Value;
+            stuckMessage = "Possibly stuck";
             return true;
         }
         return false;
@@ -547,18 +588,44 @@ else
         if (pr.CheckRuns is not { Count: > 0 })
             return "Click to expand/collapse details";
 
+        var lines = new List<string>();
+
+        var inProgress = pr.CheckRuns
+            .Where(c => c.Conclusion is null && c.Status is "in_progress")
+            .ToList();
+        foreach (var c in inProgress)
+        {
+            var line = $"🔄 {c.Name}";
+            if (c.StartedAt is { } started)
+            {
+                var elapsed = DateTimeOffset.UtcNow - started;
+                line += $" (running {FormatDuration(elapsed)})";
+            }
+            lines.Add(line);
+        }
+
         var failed = pr.CheckRuns
             .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out")
             .ToList();
-        if (failed.Count == 0)
-            return "Click to expand/collapse details";
-
-        return string.Join("\n", failed.Select(c =>
+        foreach (var c in failed)
         {
             var line = $"✘ {c.Name}";
+            if (c.Duration is { } dur)
+                line += $" ({FormatDuration(dur)})";
             if (!string.IsNullOrEmpty(c.Title))
                 line += $" — {c.Title}";
-            return line;
-        }));
+            lines.Add(line);
+        }
+
+        return lines.Count > 0 ? string.Join("\n", lines) : "Click to expand/collapse details";
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        if (duration.TotalMinutes >= 1)
+            return $"{(int)duration.TotalMinutes}m {duration.Seconds}s";
+        return $"{(int)duration.TotalSeconds}s";
     }
 }

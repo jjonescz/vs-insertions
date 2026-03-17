@@ -978,9 +978,9 @@ else
 
         return rows
             .OrderBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.IsIncoming ? r.SourceBranch : r.Subscription?.TargetBranch, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.IsIncoming ? 0 : 1)
-            .ThenBy(r => r.Subscription?.Channel)
-            .ThenBy(r => r.Subscription?.TargetBranch)
+            .ThenBy(r => r.Subscription?.Channel, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

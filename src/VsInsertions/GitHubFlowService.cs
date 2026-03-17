@@ -92,7 +92,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             headRefOid headRefName baseRefName merged mergeable
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
-                ... on CheckRun { id databaseId name status conclusion detailsUrl title }
+                ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
             } } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
@@ -300,6 +300,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 Conclusion = c["conclusion"]?.ToString()?.ToLowerInvariant(),
                 Url = c["detailsUrl"]?.ToString(),
                 Title = c["title"]?.ToString(),
+                StartedAt = c["startedAt"] is { } sa ? sa.GetValue<DateTimeOffset>() : null,
+                CompletedAt = c["completedAt"] is { } ca ? ca.GetValue<DateTimeOffset>() : null,
             })
             .ToList() ?? [];
 
@@ -763,17 +765,37 @@ public sealed class FlowPr
 
             var passed = CheckRuns.Count(c => c.Conclusion == "success");
             var failed = CheckRuns.Count(c => c.Conclusion is "failure" or "cancelled" or "timed_out");
-            var pending = CheckRuns.Count(c => c.Conclusion is null && c.Status is "queued" or "in_progress");
+            var inProgress = CheckRuns.Count(c => c.Conclusion is null && c.Status is "in_progress");
+            var queued = CheckRuns.Count(c => c.Conclusion is null && c.Status is "queued");
             var total = CheckRuns.Count;
 
             if (failed > 0)
                 return $"✘ {failed}/{total}";
-            if (pending > 0)
+            if (inProgress > 0 && State == "open" && !Merged)
+            {
+                var maxElapsed = CheckRuns
+                    .Where(c => c.Conclusion is null && c.Status is "in_progress" && c.StartedAt.HasValue)
+                    .Select(c => DateTimeOffset.UtcNow - c.StartedAt!.Value)
+                    .DefaultIfEmpty()
+                    .Max();
+                var suffix = maxElapsed > TimeSpan.Zero ? $" {FormatDuration(maxElapsed)}" : "";
+                return $"🔄 {inProgress}/{total}{suffix}";
+            }
+            if (queued > 0)
                 return $"⏳ {passed}/{total}";
             if (passed == total)
                 return $"✔ {total}";
             return $"{passed}/{total}";
         }
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        if (duration.TotalMinutes >= 1)
+            return $"{(int)duration.TotalMinutes}m";
+        return $"{(int)duration.TotalSeconds}s";
     }
 }
 
@@ -794,7 +816,13 @@ public sealed class CheckRunInfo
     public string? Conclusion { get; set; } // success, failure, cancelled, timed_out, etc.
     public string? Url { get; set; }
     public string? Title { get; set; } // output title (e.g., "1 test(s) failed")
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
     public List<CheckAnnotation> Annotations { get; set; } = [];
+
+    public TimeSpan? Duration => StartedAt.HasValue && CompletedAt.HasValue
+        ? CompletedAt.Value - StartedAt.Value
+        : null;
 }
 
 public sealed class CheckAnnotation
