@@ -94,6 +94,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
             } } } } } }
+            allCommits: commits(first: 100) { nodes { commit { author { user { login } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
 
@@ -304,6 +305,10 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 CompletedAt = c["completedAt"] is { } ca ? ca.GetValue<DateTimeOffset>() : null,
             })
             .ToList() ?? [];
+
+        var allCommitNodes = node["allCommits"]?["nodes"]?.AsArray();
+        pr.NonBotCommitCount = allCommitNodes?
+            .Count(c => c is not null && !IsBotLogin(c["commit"]?["author"]?["user"]?["login"]?.ToString())) ?? 0;
 
         var commentNodes = node["comments"]?["nodes"]?.AsArray();
         pr.Comments = commentNodes?
@@ -740,6 +745,7 @@ public sealed class FlowPr
     public List<PrReview>? Reviews { get; set; }
     public List<CheckRunInfo>? CheckRuns { get; set; }
     public List<PrComment>? Comments { get; set; }
+    public int? NonBotCommitCount { get; set; }
     public bool AnnotationsLoaded { get; set; }
 
     /// <summary>

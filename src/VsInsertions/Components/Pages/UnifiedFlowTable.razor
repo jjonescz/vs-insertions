@@ -34,7 +34,7 @@ else
                     <th>Date</th>
                     <th>CI</th>
                     <th title="Reviews">👀</th>
-                    <th title="Non-bot comments">💬</th>
+                    <th title="Non-bot activity (commits + comments)">💬</th>
                     <th>Actions</th>
                     <th></th>
                 }
@@ -177,7 +177,7 @@ else
                                     }
                                 </td>
 
-                                @* Comments *@
+                                @* Non-bot activity (commits + comments) *@
                                 <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
                                     @if (!primaryPr.DetailsLoaded)
                                     {
@@ -185,7 +185,16 @@ else
                                     }
                                     else
                                     {
-                                        @(primaryPr.Comments?.Count ?? 0)
+                                        var commits = primaryPr.NonBotCommitCount ?? 0;
+                                        var comments = primaryPr.Comments?.Count ?? 0;
+                                        @if (commits + comments == 0)
+                                        {
+                                            <text>0</text>
+                                        }
+                                        else
+                                        {
+                                            <span title="@commits non-bot commit(s) + @comments non-bot comment(s)">@(commits)+@(comments)</span>
+                                        }
                                     }
                                 </td>
 
