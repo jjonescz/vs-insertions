@@ -597,11 +597,11 @@ else
             if (!FlowsState.SourceManifests.TryGetValue(branch!, out var manifest))
             {
                 manifest = await GitHubFlowService.FetchSourceManifestAsync(gitHubClient, "dotnet", "dotnet", branch!);
-                if (manifest != null)
-                    FlowsState.SourceManifests[branch!] = manifest;
+                // Cache even null results (as empty list) to avoid repeated failing requests.
+                FlowsState.SourceManifests[branch!] = manifest ?? [];
             }
 
-            if (manifest != null)
+            if (manifest is { Count: > 0 })
             {
                 var sources = subWithBranch
                     .Where(x => string.Equals(x.Sub.TargetBranch, branch, StringComparison.OrdinalIgnoreCase))

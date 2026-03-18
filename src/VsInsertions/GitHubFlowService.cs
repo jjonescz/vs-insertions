@@ -95,7 +95,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
             } } } } } }
-            allCommits: commits(first: 100) { nodes { commit { abbreviatedOid message committedDate author { user { login } } } } }
+            allCommits: commits(last: 100) { nodes { commit { abbreviatedOid message committedDate author { name user { login } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
 
@@ -309,11 +309,23 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
         var allCommitNodes = node["allCommits"]?["nodes"]?.AsArray();
         pr.NonBotCommits = allCommitNodes?
-            .Where(c => c is not null && !IsBotLogin(c["commit"]?["author"]?["user"]?["login"]?.ToString()))
+            .Where(c =>
+            {
+                if (c is null) return false;
+                var login = c["commit"]?["author"]?["user"]?["login"]?.ToString();
+                // When no GitHub user is linked, fall back to the git author name.
+                if (login is null)
+                {
+                    var name = c["commit"]?["author"]?["name"]?.ToString();
+                    return !string.IsNullOrEmpty(name) && !IsBotLogin(name);
+                }
+                return !IsBotLogin(login);
+            })
             .Select(c => new PrCommit
             {
                 Sha = c!["commit"]?["abbreviatedOid"]?.ToString() ?? "",
-                Author = c["commit"]?["author"]?["user"]?["login"]?.ToString() ?? "",
+                Author = c["commit"]?["author"]?["user"]?["login"]?.ToString()
+                    ?? c["commit"]?["author"]?["name"]?.ToString() ?? "",
                 Message = Truncate(c["commit"]?["message"]?.ToString()?.Split('\n')[0] ?? "", 200),
                 CommittedAt = c["commit"]?["committedDate"]?.GetValue<DateTimeOffset>() ?? default,
             })
@@ -735,7 +747,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         {
             var url = $"{GitHubApiBase}/repos/{owner}/{repo}/contents/src/source-manifest.json?ref={Uri.EscapeDataString(branch)}";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("Accept", "application/vnd.github.raw+json");
+            request.Headers.Add("Accept", "application/vnd.github.raw");
             using var response = await client.SendAsync(request);
             if (!response.IsSuccessStatusCode)
             {
@@ -744,7 +756,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             }
 
             var json = await response.Content.ReadAsStringAsync();
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             var repos = doc.RootElement.GetProperty("repositories");
             var entries = new List<SourceManifestEntry>();
             foreach (var item in repos.EnumerateArray())
@@ -817,7 +829,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 if (parts.Length != 2 || !IsValidGraphQLIdentifier(parts[0]) || !IsValidGraphQLIdentifier(parts[1]))
                     continue;
 
-                var branchRef = $"refs/heads/{branch}";
+                var branchRef = $"refs/heads/{branch.Replace("\\", "\\\\").Replace("\"", "\\\"")}";
                 queryParts.Add(
                     $"repo_{idx}: repository(owner: \"{parts[0]}\", name: \"{parts[1]}\") {{ ref(qualifiedName: \"{branchRef}\") {{ target {{ oid }} }} }}");
                 checkList.Add((repoShort, branch, entry.CommitSha));
