@@ -1,7 +1,6 @@
 @page "/flows"
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.DataProtection
-@using System.Text.Json.Nodes
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
@@ -13,6 +12,7 @@
 @inject ILoggerFactory LoggerFactory
 @inject FlowsState FlowsState
 @inject IDataProtectionProvider DataProtectionProvider
+@implements IDisposable
 
 <PageTitle>Flows</PageTitle>
 
@@ -536,6 +536,7 @@ else
         }
 
         await LoadDisplayedPrDetailsAsync();
+        await CheckSourceManifestAsync();
     }
 
     /// <summary>
@@ -561,6 +562,57 @@ else
     {
         pr.DetailsLoaded = false;
         await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, [pr]);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Checks whether source repos are up-to-date by comparing source manifests
+    /// (e.g., <c>src/source-manifest.json</c> in dotnet/dotnet) against source branches.
+    /// Works for both incoming flows to dotnet/dotnet and outgoing flows from any repo to dotnet/dotnet.
+    /// </summary>
+    private async Task CheckSourceManifestAsync()
+    {
+        // Find subscriptions where dotnet/dotnet is the target repo.
+        var subs = filteredSubscriptions
+            .Where(s => !string.IsNullOrEmpty(s.SourceRepository)
+                && string.Equals(s.TargetRepoShort, "dotnet/dotnet", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (subs.Count == 0)
+            return;
+
+        // Resolve source branches and group by target branch to fetch one manifest per branch.
+        var subWithBranch = subs
+            .Select(s => (Sub: s, SourceBranch: ResolveSourceBranch(s)))
+            .Where(x => !string.IsNullOrEmpty(x.SourceBranch))
+            .ToList();
+
+        var targetBranches = subWithBranch
+            .Select(x => x.Sub.TargetBranch)
+            .Where(b => !string.IsNullOrEmpty(b))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var branch in targetBranches)
+        {
+            if (!FlowsState.SourceManifests.TryGetValue(branch!, out var manifest))
+            {
+                manifest = await GitHubFlowService.FetchSourceManifestAsync(gitHubClient, "dotnet", "dotnet", branch!);
+                // Cache even null results (as empty list) to avoid repeated failing requests.
+                FlowsState.SourceManifests[branch!] = manifest ?? [];
+            }
+
+            if (manifest is { Count: > 0 })
+            {
+                var sources = subWithBranch
+                    .Where(x => string.Equals(x.Sub.TargetBranch, branch, StringComparison.OrdinalIgnoreCase))
+                    .Select(x => (x.Sub.SourceRepoShort, x.Sub.SourceRepository!, x.SourceBranch!))
+                    .ToList();
+                var results = await GitHubFlowService.CheckSourceUpToDateAsync(gitHubClient, manifest, sources);
+                foreach (var (key, value) in results)
+                    FlowsState.ManifestCheckResults[key] = value;
+            }
+        }
+
         StateHasChanged();
     }
 
@@ -633,6 +685,8 @@ else
         }
     }
 
+    private CancellationTokenSource? retryCiRefreshCts;
+
     private async Task RetryCiAsync(FlowPr pr)
     {
         var parts = pr.Repo.Split('/');
@@ -654,6 +708,12 @@ else
             if (success)
             {
                 await LoadPrDetailsAsync(pr);
+
+                // If no checks are running yet, poll in the background until they appear.
+                if (!HasRunningChecks(pr))
+                {
+                    ScheduleRetryCiRefresh(pr);
+                }
             }
         }
         catch (Exception ex)
@@ -668,6 +728,50 @@ else
             actionType = null;
             StateHasChanged();
         }
+    }
+
+    private static bool HasRunningChecks(FlowPr pr) =>
+        pr.CheckRuns?.Any(c => c.Status is "in_progress") == true;
+
+    /// <summary>
+    /// Schedules background refreshes at 5s, 10s, 15s, 30s, 60s, 90s, 120s after retry CI
+    /// until a running check appears.
+    /// </summary>
+    private void ScheduleRetryCiRefresh(FlowPr pr)
+    {
+        retryCiRefreshCts?.Cancel();
+        var cts = retryCiRefreshCts = new CancellationTokenSource();
+        var delaysSeconds = new[] { 5, 10, 15, 30, 60, 90, 120 };
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var delay in delaysSeconds)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(delay), cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                await InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        await LoadPrDetailsAsync(pr);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to auto-refresh PR after CI retry");
+                    }
+                });
+
+                if (cts.Token.IsCancellationRequested || HasRunningChecks(pr))
+                    return;
+            }
+        });
     }
 
     // === Lazy Annotation Loading ===
@@ -976,6 +1080,24 @@ else
             }
         }
 
+        // Apply cached source manifest check results.
+        var manifestResults = FlowsState.ManifestCheckResults;
+        if (manifestResults.Count > 0)
+        {
+            foreach (var row in rows)
+            {
+                if (row.Subscription is null || string.IsNullOrEmpty(row.SourceBranch))
+                    continue;
+                var key = $"{row.Subscription.SourceRepoShort}|{row.SourceBranch}";
+                if (manifestResults.TryGetValue(key, out var result))
+                {
+                    row.ManifestCommitSha = result.ManifestCommitSha;
+                    row.LatestSourceCommitSha = result.LatestSourceCommitSha;
+                    row.SourceUpToDate = result.SourceUpToDate;
+                }
+            }
+        }
+
         return rows
             .OrderBy(r => r.OtherRepo, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.IsIncoming ? r.SourceBranch : r.Subscription?.TargetBranch, StringComparer.OrdinalIgnoreCase)
@@ -1044,4 +1166,9 @@ else
         return (source, target);
     }
 
+    public void Dispose()
+    {
+        retryCiRefreshCts?.Cancel();
+        retryCiRefreshCts?.Dispose();
+    }
 }

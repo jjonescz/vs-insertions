@@ -34,7 +34,7 @@ else
                     <th>Date</th>
                     <th>CI</th>
                     <th title="Reviews">👀</th>
-                    <th title="Non-bot comments">💬</th>
+                    <th title="Non-bot activity (commits + comments)">💬</th>
                     <th>Actions</th>
                     <th></th>
                 }
@@ -100,6 +100,10 @@ else
                             @if (stuck)
                             {
                                 <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) @(row.Subscription?.UpdateFrequency is { } freq ? $"(frequency: {freq})" : "")">⚠️</span>
+                            }
+                            @if (row.SourceUpToDate == true && !row.Prs.Any(p => p.State == "open"))
+                            {
+                                <span class="ms-1" title="Source is up-to-date (no new changes on source branch)">✅</span>
                             }
                         </td>
 
@@ -177,7 +181,7 @@ else
                                     }
                                 </td>
 
-                                @* Comments *@
+                                @* Non-bot activity (commits + comments) *@
                                 <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
                                     @if (!primaryPr.DetailsLoaded)
                                     {
@@ -185,7 +189,21 @@ else
                                     }
                                     else
                                     {
-                                        @(primaryPr.Comments?.Count ?? 0)
+                                        var showCommits = !row.IsSameRepo || row.Subscription != null;
+                                        var commits = showCommits ? (primaryPr.NonBotCommits?.Count ?? 0) : 0;
+                                        var comments = primaryPr.Comments?.Count ?? 0;
+                                        @if (commits + comments == 0)
+                                        {
+                                            <text>0</text>
+                                        }
+                                        else if (showCommits)
+                                        {
+                                            <span title="@commits non-bot commit(s) + @comments non-bot comment(s)">@(commits)+@(comments)</span>
+                                        }
+                                        else
+                                        {
+                                            <span title="@comments non-bot comment(s)">@(comments)</span>
+                                        }
                                     }
                                 </td>
 
@@ -284,6 +302,28 @@ else
                                     {
                                         <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
                                     }
+                                    @if (row.ManifestCommitSha != null)
+                                    {
+                                        <strong>Source manifest:</strong>@(" ")
+                                        @if (row.SourceUpToDate == true)
+                                        {
+                                            <span class="text-success">✅ Up-to-date</span>
+                                        }
+                                        else if (row.SourceUpToDate == false)
+                                        {
+                                            <span class="text-warning">⚠️ Source has new changes</span>
+                                        }
+                                        <small class="text-muted ms-1">
+                                            (manifest: <code>@row.ManifestCommitSha[..Math.Min(7, row.ManifestCommitSha.Length)]</code>@if (row.LatestSourceCommitSha != null)
+                                            {<text>, latest: <code>@row.LatestSourceCommitSha[..Math.Min(7, row.LatestSourceCommitSha.Length)]</code></text>})
+                                        </small>
+                                        @if (row.SourceUpToDate == false && row.LatestSourceCommitSha != null && row.Subscription != null)
+                                        {
+                                            <a href="https://github.com/@row.Subscription.SourceRepoShort/compare/@row.ManifestCommitSha...@row.LatestSourceCommitSha"
+                                               target="_blank" class="ms-2" title="Compare commits on source repo">diff</a>
+                                        }
+                                        <br/>
+                                    }
                                     @foreach (var pr in row.Prs)
                                     {
                                         @if (row.Prs.Count > 1)
@@ -379,6 +419,21 @@ else
                                             {
                                                 <div class="text-muted mb-2">✔ @successCount check(s) passed</div>
                                             }
+                                        }
+
+                                        @if (pr.NonBotCommits is { Count: > 0 })
+                                        {
+                                            <strong>Commits (non-bot):</strong>
+                                            <ul class="mb-2">
+                                                @foreach (var commit in pr.NonBotCommits)
+                                                {
+                                                    <li>
+                                                        <strong>@commit.Author</strong>
+                                                        <small class="text-muted">@commit.CommittedAt.ToString("g")</small>:
+                                                        <code>@commit.Sha</code> @commit.Message
+                                                    </li>
+                                                }
+                                            </ul>
                                         }
 
                                         @if (pr.Comments is { Count: > 0 })
@@ -550,6 +605,9 @@ else
         // The remaining check (no open PR) only applies to rows with a subscription.
         if (!hasSubscription || threshold is null) return false;
 
+        // If we know the source repo hasn't changed since the last flow, it's not stuck.
+        if (row.SourceUpToDate == true) return false;
+
         // Use the most recent closed/merged PR's UpdatedAt as the reference point.
         var lastPr = row.Prs.OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt).FirstOrDefault();
         var lastDate = lastPr?.UpdatedAt ?? lastPr?.CreatedAt;
@@ -559,7 +617,7 @@ else
         if (elapsedSinceLastPr > threshold.Value)
         {
             overdue = elapsedSinceLastPr - threshold.Value;
-            stuckMessage = "Possibly stuck";
+            stuckMessage = row.SourceUpToDate == false ? "Possibly stuck (source has new changes)" : "Possibly stuck";
             return true;
         }
         return false;
