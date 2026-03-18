@@ -185,15 +185,20 @@ else
                                     }
                                     else
                                     {
-                                        var commits = primaryPr.NonBotCommitCount ?? 0;
+                                        var showCommits = !row.IsSameRepo || row.Subscription != null;
+                                        var commits = showCommits ? (primaryPr.NonBotCommitCount ?? 0) : 0;
                                         var comments = primaryPr.Comments?.Count ?? 0;
                                         @if (commits + comments == 0)
                                         {
                                             <text>0</text>
                                         }
-                                        else
+                                        else if (showCommits)
                                         {
                                             <span title="@commits non-bot commit(s) + @comments non-bot comment(s)">@(commits)+@(comments)</span>
+                                        }
+                                        else
+                                        {
+                                            <span title="@comments non-bot comment(s)">@(comments)</span>
                                         }
                                     }
                                 </td>
