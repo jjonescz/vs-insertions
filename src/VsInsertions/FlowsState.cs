@@ -28,6 +28,12 @@ public sealed class FlowsState
     public string? CurrentRepo { get; set; }
     public Dictionary<string, RepoPrCache> RepoPrCaches { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Cached source manifest entries from dotnet/dotnet, keyed by branch.</summary>
+    public Dictionary<string, List<SourceManifestEntry>> SourceManifests { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cached manifest check results, keyed by "sourceRepoShort|sourceBranch".</summary>
+    public Dictionary<string, SourceManifestCheckResult> ManifestCheckResults { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public RepoPrCache GetOrCreatePrCache(string repo)
     {
         if (!RepoPrCaches.TryGetValue(repo, out var cache))

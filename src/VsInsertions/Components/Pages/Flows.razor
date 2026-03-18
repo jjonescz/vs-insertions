@@ -537,6 +537,7 @@ else
         }
 
         await LoadDisplayedPrDetailsAsync();
+        await CheckSourceManifestAsync();
     }
 
     /// <summary>
@@ -562,6 +563,57 @@ else
     {
         pr.DetailsLoaded = false;
         await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, [pr]);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Checks whether source repos are up-to-date by comparing source manifests
+    /// (e.g., <c>src/source-manifest.json</c> in dotnet/dotnet) against source branches.
+    /// Works for both incoming flows to dotnet/dotnet and outgoing flows from any repo to dotnet/dotnet.
+    /// </summary>
+    private async Task CheckSourceManifestAsync()
+    {
+        // Find subscriptions where dotnet/dotnet is the target repo.
+        var subs = filteredSubscriptions
+            .Where(s => !string.IsNullOrEmpty(s.SourceRepository)
+                && string.Equals(s.TargetRepoShort, "dotnet/dotnet", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (subs.Count == 0)
+            return;
+
+        // Resolve source branches and group by target branch to fetch one manifest per branch.
+        var subWithBranch = subs
+            .Select(s => (Sub: s, SourceBranch: ResolveSourceBranch(s)))
+            .Where(x => !string.IsNullOrEmpty(x.SourceBranch))
+            .ToList();
+
+        var targetBranches = subWithBranch
+            .Select(x => x.Sub.TargetBranch)
+            .Where(b => !string.IsNullOrEmpty(b))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var branch in targetBranches)
+        {
+            if (!FlowsState.SourceManifests.TryGetValue(branch!, out var manifest))
+            {
+                manifest = await GitHubFlowService.FetchSourceManifestAsync(gitHubClient, "dotnet", "dotnet", branch!);
+                if (manifest != null)
+                    FlowsState.SourceManifests[branch!] = manifest;
+            }
+
+            if (manifest != null)
+            {
+                var sources = subWithBranch
+                    .Where(x => string.Equals(x.Sub.TargetBranch, branch, StringComparison.OrdinalIgnoreCase))
+                    .Select(x => (x.Sub.SourceRepoShort, x.Sub.SourceRepository!, x.SourceBranch!))
+                    .ToList();
+                var results = await GitHubFlowService.CheckSourceUpToDateAsync(gitHubClient, manifest, sources);
+                foreach (var (key, value) in results)
+                    FlowsState.ManifestCheckResults[key] = value;
+            }
+        }
+
         StateHasChanged();
     }
 
@@ -1026,6 +1078,24 @@ else
                     IsIncoming = true,
                     Prs = prs,
                 });
+            }
+        }
+
+        // Apply cached source manifest check results.
+        var manifestResults = FlowsState.ManifestCheckResults;
+        if (manifestResults.Count > 0)
+        {
+            foreach (var row in rows)
+            {
+                if (row.Subscription is null || string.IsNullOrEmpty(row.SourceBranch))
+                    continue;
+                var key = $"{row.Subscription.SourceRepoShort}|{row.SourceBranch}";
+                if (manifestResults.TryGetValue(key, out var result))
+                {
+                    row.ManifestCommitSha = result.ManifestCommitSha;
+                    row.LatestSourceCommitSha = result.LatestSourceCommitSha;
+                    row.SourceUpToDate = result.SourceUpToDate;
+                }
             }
         }
 

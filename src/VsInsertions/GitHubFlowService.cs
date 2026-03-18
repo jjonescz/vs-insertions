@@ -723,6 +723,150 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength] + "…";
+
+    /// <summary>
+    /// Fetches <c>src/source-manifest.json</c> from a GitHub repo/branch and returns the repository entries.
+    /// Returns null if the file does not exist or cannot be parsed.
+    /// </summary>
+    public async Task<List<SourceManifestEntry>?> FetchSourceManifestAsync(
+        HttpClient client, string owner, string repo, string branch)
+    {
+        try
+        {
+            var url = $"{GitHubApiBase}/repos/{owner}/{repo}/contents/src/source-manifest.json?ref={Uri.EscapeDataString(branch)}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("Accept", "application/vnd.github.raw+json");
+            using var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogDebug("Source manifest not found at {Owner}/{Repo}@{Branch}: {Status}", owner, repo, branch, response.StatusCode);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var doc = JsonDocument.Parse(json);
+            var repos = doc.RootElement.GetProperty("repositories");
+            var entries = new List<SourceManifestEntry>();
+            foreach (var item in repos.EnumerateArray())
+            {
+                entries.Add(new SourceManifestEntry
+                {
+                    Path = item.GetProperty("path").GetString() ?? "",
+                    RemoteUri = item.GetProperty("remoteUri").GetString() ?? "",
+                    CommitSha = item.GetProperty("commitSha").GetString() ?? "",
+                });
+            }
+            return entries;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch source manifest from {Owner}/{Repo}@{Branch}", owner, repo, branch);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// For each subscription targeting a repo with a source manifest, checks whether the source repo's
+    /// branch has advanced beyond the commit recorded in the manifest.
+    /// Returns results keyed by "sourceRepoShort|sourceBranch".
+    /// </summary>
+    public async Task<Dictionary<string, SourceManifestCheckResult>> CheckSourceUpToDateAsync(
+        HttpClient client,
+        List<SourceManifestEntry> manifest,
+        IEnumerable<(string SourceRepoShort, string SourceRepoUrl, string SourceBranch)> sources)
+    {
+        var results = new Dictionary<string, SourceManifestCheckResult>(StringComparer.OrdinalIgnoreCase);
+
+        // Build lookup: normalized remote URI → manifest entry.
+        var manifestLookup = new Dictionary<string, SourceManifestEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in manifest)
+        {
+            var normalized = NormalizeGitHubUrl(entry.RemoteUri);
+            if (!string.IsNullOrEmpty(normalized))
+                manifestLookup.TryAdd(normalized, entry);
+        }
+
+        // Match sources against manifest entries.
+        var toCheck = new List<(string RepoShort, string Branch, SourceManifestEntry Entry)>();
+        foreach (var (repoShort, repoUrl, branch) in sources)
+        {
+            var normalized = NormalizeGitHubUrl(repoUrl);
+            if (normalized != null && manifestLookup.TryGetValue(normalized, out var entry))
+            {
+                var key = $"{repoShort}|{branch}";
+                if (!results.ContainsKey(key))
+                {
+                    results[key] = new SourceManifestCheckResult { ManifestCommitSha = entry.CommitSha };
+                    toCheck.Add((repoShort, branch, entry));
+                }
+            }
+        }
+
+        if (toCheck.Count == 0) return results;
+
+        try
+        {
+            // Batch GraphQL query to get the latest commit on each source branch.
+            var queryParts = new List<string>();
+            var checkList = new List<(string RepoShort, string Branch, string ManifestSha)>();
+
+            int idx = 0;
+            foreach (var (repoShort, branch, entry) in toCheck)
+            {
+                var parts = repoShort.Split('/');
+                if (parts.Length != 2 || !IsValidGraphQLIdentifier(parts[0]) || !IsValidGraphQLIdentifier(parts[1]))
+                    continue;
+
+                var branchRef = $"refs/heads/{branch}";
+                queryParts.Add(
+                    $"repo_{idx}: repository(owner: \"{parts[0]}\", name: \"{parts[1]}\") {{ ref(qualifiedName: \"{branchRef}\") {{ target {{ oid }} }} }}");
+                checkList.Add((repoShort, branch, entry.CommitSha));
+                idx++;
+            }
+
+            if (queryParts.Count == 0) return results;
+
+            var gqlQuery = $"{{ {string.Join(" ", queryParts)} }}";
+            var data = await ExecuteGraphQLAsync(client, gqlQuery);
+            if (data is null) return results;
+
+            for (int i = 0; i < checkList.Count; i++)
+            {
+                var sha = data[$"repo_{i}"]?["ref"]?["target"]?["oid"]?.ToString();
+                if (sha != null)
+                {
+                    var key = $"{checkList[i].RepoShort}|{checkList[i].Branch}";
+                    if (results.TryGetValue(key, out var result))
+                    {
+                        result.LatestSourceCommitSha = sha;
+                        result.SourceUpToDate = string.Equals(sha, checkList[i].ManifestSha, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to check source up-to-date status");
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Normalizes a GitHub URL to "owner/repo" format.
+    /// Handles https://github.com/owner/repo, https://github.com/owner/repo.git, etc.
+    /// </summary>
+    private static string? NormalizeGitHubUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return null;
+        var path = uri.AbsolutePath.TrimStart('/').TrimEnd('/');
+        if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            path = path[..^4];
+        var segments = path.Split('/');
+        return segments.Length >= 2 ? $"{segments[0]}/{segments[1]}" : null;
+    }
 }
 
 public sealed class FlowPrSearchResults
@@ -865,4 +1009,18 @@ public sealed class PrCommit
     public string Author { get; set; } = "";
     public string Message { get; set; } = "";
     public DateTimeOffset CommittedAt { get; set; }
+}
+
+public sealed class SourceManifestEntry
+{
+    public string Path { get; set; } = "";
+    public string RemoteUri { get; set; } = "";
+    public string CommitSha { get; set; } = "";
+}
+
+public sealed class SourceManifestCheckResult
+{
+    public string ManifestCommitSha { get; set; } = "";
+    public string? LatestSourceCommitSha { get; set; }
+    public bool? SourceUpToDate { get; set; }
 }
