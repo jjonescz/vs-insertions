@@ -317,6 +317,11 @@ else
                                             (manifest: <code>@row.ManifestCommitSha[..Math.Min(7, row.ManifestCommitSha.Length)]</code>@if (row.LatestSourceCommitSha != null)
                                             {<text>, latest: <code>@row.LatestSourceCommitSha[..Math.Min(7, row.LatestSourceCommitSha.Length)]</code></text>})
                                         </small>
+                                        @if (row.SourceUpToDate == false && row.LatestSourceCommitSha != null && row.Subscription != null)
+                                        {
+                                            <a href="https://github.com/@row.Subscription.SourceRepoShort/compare/@row.ManifestCommitSha...@row.LatestSourceCommitSha"
+                                               target="_blank" class="ms-2" title="Compare commits on source repo">diff</a>
+                                        }
                                         <br/>
                                     }
                                     @foreach (var pr in row.Prs)
