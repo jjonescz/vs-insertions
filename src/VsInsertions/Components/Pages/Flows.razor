@@ -735,14 +735,14 @@ else
         pr.CheckRuns?.Any(c => c.Status is "in_progress" or "queued") == true;
 
     /// <summary>
-    /// Schedules background refreshes at 30s, 60s, 90s, 120s after retry CI
+    /// Schedules background refreshes at 5s, 10s, 15s, 30s, 60s, 90s, 120s after retry CI
     /// until a running/queued check appears.
     /// </summary>
     private void ScheduleRetryCiRefresh(FlowPr pr)
     {
         retryCiRefreshCts?.Cancel();
         var cts = retryCiRefreshCts = new CancellationTokenSource();
-        var delaysSeconds = new[] { 30, 60, 90, 120 };
+        var delaysSeconds = new[] { 5, 10, 15, 30, 60, 90, 120 };
 
         _ = Task.Run(async () =>
         {
