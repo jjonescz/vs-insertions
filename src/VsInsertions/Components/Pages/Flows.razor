@@ -13,6 +13,7 @@
 @inject ILoggerFactory LoggerFactory
 @inject FlowsState FlowsState
 @inject IDataProtectionProvider DataProtectionProvider
+@implements IDisposable
 
 <PageTitle>Flows</PageTitle>
 
@@ -633,6 +634,8 @@ else
         }
     }
 
+    private CancellationTokenSource? retryCiRefreshCts;
+
     private async Task RetryCiAsync(FlowPr pr)
     {
         var parts = pr.Repo.Split('/');
@@ -654,6 +657,12 @@ else
             if (success)
             {
                 await LoadPrDetailsAsync(pr);
+
+                // If no checks are running yet, poll in the background until they appear.
+                if (!HasRunningOrQueuedChecks(pr))
+                {
+                    ScheduleRetryCiRefresh(pr);
+                }
             }
         }
         catch (Exception ex)
@@ -668,6 +677,50 @@ else
             actionType = null;
             StateHasChanged();
         }
+    }
+
+    private static bool HasRunningOrQueuedChecks(FlowPr pr) =>
+        pr.CheckRuns?.Any(c => c.Status is "in_progress" or "queued") == true;
+
+    /// <summary>
+    /// Schedules background refreshes at 30s, 60s, 90s, 120s after retry CI
+    /// until a running/queued check appears.
+    /// </summary>
+    private void ScheduleRetryCiRefresh(FlowPr pr)
+    {
+        retryCiRefreshCts?.Cancel();
+        var cts = retryCiRefreshCts = new CancellationTokenSource();
+        var delaysSeconds = new[] { 30, 60, 90, 120 };
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var delay in delaysSeconds)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(delay), cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                await InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        await LoadPrDetailsAsync(pr);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to auto-refresh PR after CI retry");
+                    }
+                });
+
+                if (cts.Token.IsCancellationRequested || HasRunningOrQueuedChecks(pr))
+                    return;
+            }
+        });
     }
 
     // === Lazy Annotation Loading ===
@@ -1044,4 +1097,9 @@ else
         return (source, target);
     }
 
+    public void Dispose()
+    {
+        retryCiRefreshCts?.Cancel();
+        retryCiRefreshCts?.Dispose();
+    }
 }
