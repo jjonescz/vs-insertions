@@ -95,7 +95,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
             } } } } } }
-            allCommits: commits(first: 100) { nodes { commit { author { user { login } } } } }
+            allCommits: commits(first: 100) { nodes { commit { abbreviatedOid message committedDate author { user { login } } } } }
             comments(first: 100) { nodes { author { login } body createdAt } }
             """;
 
@@ -308,8 +308,16 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             .ToList() ?? [];
 
         var allCommitNodes = node["allCommits"]?["nodes"]?.AsArray();
-        pr.NonBotCommitCount = allCommitNodes?
-            .Count(c => c is not null && !IsBotLogin(c["commit"]?["author"]?["user"]?["login"]?.ToString())) ?? 0;
+        pr.NonBotCommits = allCommitNodes?
+            .Where(c => c is not null && !IsBotLogin(c["commit"]?["author"]?["user"]?["login"]?.ToString()))
+            .Select(c => new PrCommit
+            {
+                Sha = c!["commit"]?["abbreviatedOid"]?.ToString() ?? "",
+                Author = c["commit"]?["author"]?["user"]?["login"]?.ToString() ?? "",
+                Message = Truncate(c["commit"]?["message"]?.ToString()?.Split('\n')[0] ?? "", 200),
+                CommittedAt = c["commit"]?["committedDate"]?.GetValue<DateTimeOffset>() ?? default,
+            })
+            .ToList() ?? [];
 
         var commentNodes = node["comments"]?["nodes"]?.AsArray();
         pr.Comments = commentNodes?
@@ -748,7 +756,7 @@ public sealed class FlowPr
     public List<PrReview>? Reviews { get; set; }
     public List<CheckRunInfo>? CheckRuns { get; set; }
     public List<PrComment>? Comments { get; set; }
-    public int? NonBotCommitCount { get; set; }
+    public List<PrCommit>? NonBotCommits { get; set; }
     public bool AnnotationsLoaded { get; set; }
 
     /// <summary>
@@ -849,4 +857,12 @@ public sealed class PrComment
     public string Author { get; set; } = "";
     public string Body { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class PrCommit
+{
+    public string Sha { get; set; } = "";
+    public string Author { get; set; } = "";
+    public string Message { get; set; } = "";
+    public DateTimeOffset CommittedAt { get; set; }
 }

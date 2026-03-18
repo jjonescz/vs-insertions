@@ -186,7 +186,7 @@ else
                                     else
                                     {
                                         var showCommits = !row.IsSameRepo || row.Subscription != null;
-                                        var commits = showCommits ? (primaryPr.NonBotCommitCount ?? 0) : 0;
+                                        var commits = showCommits ? (primaryPr.NonBotCommits?.Count ?? 0) : 0;
                                         var comments = primaryPr.Comments?.Count ?? 0;
                                         @if (commits + comments == 0)
                                         {
@@ -393,6 +393,21 @@ else
                                             {
                                                 <div class="text-muted mb-2">✔ @successCount check(s) passed</div>
                                             }
+                                        }
+
+                                        @if (pr.NonBotCommits is { Count: > 0 })
+                                        {
+                                            <strong>Commits (non-bot):</strong>
+                                            <ul class="mb-2">
+                                                @foreach (var commit in pr.NonBotCommits)
+                                                {
+                                                    <li>
+                                                        <strong>@commit.Author</strong>
+                                                        <small class="text-muted">@commit.CommittedAt.ToString("g")</small>:
+                                                        <code>@commit.Sha</code> @commit.Message
+                                                    </li>
+                                                }
+                                            </ul>
                                         }
 
                                         @if (pr.Comments is { Count: > 0 })
