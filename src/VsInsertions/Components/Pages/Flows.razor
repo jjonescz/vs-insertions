@@ -710,7 +710,7 @@ else
                 await LoadPrDetailsAsync(pr);
 
                 // If no checks are running yet, poll in the background until they appear.
-                if (!HasRunningOrQueuedChecks(pr))
+                if (!HasRunningChecks(pr))
                 {
                     ScheduleRetryCiRefresh(pr);
                 }
@@ -730,12 +730,12 @@ else
         }
     }
 
-    private static bool HasRunningOrQueuedChecks(FlowPr pr) =>
-        pr.CheckRuns?.Any(c => c.Status is "in_progress" or "queued") == true;
+    private static bool HasRunningChecks(FlowPr pr) =>
+        pr.CheckRuns?.Any(c => c.Status is "in_progress") == true;
 
     /// <summary>
     /// Schedules background refreshes at 5s, 10s, 15s, 30s, 60s, 90s, 120s after retry CI
-    /// until a running/queued check appears.
+    /// until a running check appears.
     /// </summary>
     private void ScheduleRetryCiRefresh(FlowPr pr)
     {
@@ -768,7 +768,7 @@ else
                     }
                 });
 
-                if (cts.Token.IsCancellationRequested || HasRunningOrQueuedChecks(pr))
+                if (cts.Token.IsCancellationRequested || HasRunningChecks(pr))
                     return;
             }
         });
