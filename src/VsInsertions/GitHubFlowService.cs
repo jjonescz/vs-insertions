@@ -769,8 +769,8 @@ public sealed class FlowPr
             var queued = CheckRuns.Count(c => c.Conclusion is null && c.Status is "queued");
             var total = CheckRuns.Count;
 
-            if (failed > 0)
-                return $"✘ {failed}/{total}";
+            // Show in-progress before failures: failures may just be checks waiting for running ones to finish
+            // (e.g., "Maestro auto-merge - All Checks Successful").
             if (inProgress > 0 && State == "open" && !Merged)
             {
                 var maxElapsed = CheckRuns
@@ -781,6 +781,8 @@ public sealed class FlowPr
                 var suffix = maxElapsed > TimeSpan.Zero ? $" {FormatDuration(maxElapsed)}" : "";
                 return $"🔄 {inProgress}/{total}{suffix}";
             }
+            if (failed > 0)
+                return $"✘ {failed}/{total}";
             if (queued > 0)
                 return $"⏳ {passed}/{total}";
             if (passed == total)
