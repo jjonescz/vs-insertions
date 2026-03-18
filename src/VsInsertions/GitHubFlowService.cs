@@ -14,6 +14,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         "dotnet-maestro[bot]",
         "dotnet-maestro",
         "azure-pipelines[bot]",
+        "azure-pipelines",
         "github-actions[bot]",
         "dependabot[bot]",
         "msftbot[bot]",
@@ -312,7 +313,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
 
         var commentNodes = node["comments"]?["nodes"]?.AsArray();
         pr.Comments = commentNodes?
-            .Where(c => c is not null && !IsBotLogin(c["author"]?["login"]?.ToString()))
+            .Where(c => c is not null
+                && !IsBotLogin(c["author"]?["login"]?.ToString())
+                && !(c["body"]?.ToString()?.StartsWith("/azp run", StringComparison.OrdinalIgnoreCase) == true))
             .Select(c => new PrComment
             {
                 Author = c!["author"]?["login"]?.ToString() ?? "",
