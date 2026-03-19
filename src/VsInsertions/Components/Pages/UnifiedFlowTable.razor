@@ -734,6 +734,8 @@ else
         .DisableHtml()
         .Build();
 
+    private static readonly Ganss.Xss.HtmlSanitizer Sanitizer = new();
+
     private static MarkupString RenderMarkdown(string markdown) =>
-        new(Markdown.ToHtml(markdown, MarkdownPipeline));
+        new(Sanitizer.Sanitize(Markdown.ToHtml(markdown, MarkdownPipeline)));
 }
