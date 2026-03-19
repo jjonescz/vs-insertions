@@ -90,7 +90,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         if (prList.Count == 0) return;
 
         const string detailsFields = """
-            headRefOid headRefName baseRefName merged mergeable mergeStateStatus
+            headRefOid headRefName baseRefName merged mergeable mergeStateStatus body
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
@@ -277,6 +277,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             _ => null,
         };
         pr.MergeStateStatus = node["mergeStateStatus"]?.ToString();
+        pr.Body = node["body"]?.ToString();
 
         var reviewNodes = node["reviews"]?["nodes"]?.AsArray();
         pr.Reviews = reviewNodes?
@@ -1043,6 +1044,7 @@ public sealed class FlowPr
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public bool DetailsLoaded { get; set; }
+    public string? Body { get; set; }
     public bool? Mergeable { get; set; }
     /// <summary>
     /// GitHub merge state status: CLEAN, HAS_HOOKS, UNSTABLE, BLOCKED, DIRTY, BEHIND, DRAFT, UNKNOWN.

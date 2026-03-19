@@ -364,6 +364,13 @@ else
                                         }
 
                                         <strong>Title:</strong>@(" ")@pr.Title<br/>
+                                        @if (!string.IsNullOrWhiteSpace(pr.Body))
+                                        {
+                                            <details class="mb-2">
+                                                <summary><strong>Description</strong></summary>
+                                                <pre class="mt-1 p-2 bg-white border rounded" style="white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto;">@pr.Body</pre>
+                                            </details>
+                                        }
                                         <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
                                         @if (pr.UpdatedAt.HasValue)
                                         {
