@@ -120,7 +120,7 @@ else
             <details class="my-2">
                 <summary>How do I get a GitHub PAT?</summary>
                 <p>
-                    Use the <a href="https://cli.github.com/" target="_blank">GitHub CLI</a>:
+                    Use the <a href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">GitHub CLI</a>:
                 </p>
                 <ol>
                     <li>
@@ -129,7 +129,7 @@ else
                 </ol>
                 <p>
                     Alternatively, go to
-                    <a href="https://github.com/settings/tokens?type=beta" target="_blank">GitHub &gt; Settings &gt; Personal access tokens</a>
+                    <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener noreferrer">GitHub &gt; Settings &gt; Personal access tokens</a>
                     and create a fine-grained token with <code>Pull requests (Read and write)</code> permission
                     for the repositories you need.
                 </p>
@@ -778,7 +778,9 @@ else
 
     private async Task OnRowExpandedAsync(UnifiedFlowRow row)
     {
-        await LoadAnnotationsAsync(row);
+        await Task.WhenAll(
+            LoadAnnotationsAsync(row),
+            LoadCodeFlowTitlesAsync(row));
     }
 
     private async Task RefreshRowAsync(UnifiedFlowRow row)
@@ -787,11 +789,14 @@ else
         {
             pr.DetailsLoaded = false;
             pr.AnnotationsLoaded = false;
+            pr.CodeFlowTitlesLoaded = false;
         }
         StateHasChanged();
         await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, row.Prs);
         StateHasChanged();
-        await LoadAnnotationsAsync(row);
+        await Task.WhenAll(
+            LoadAnnotationsAsync(row),
+            LoadCodeFlowTitlesAsync(row));
     }
 
     private async Task LoadAnnotationsAsync(UnifiedFlowRow row)
@@ -806,6 +811,19 @@ else
 
         await Task.WhenAll(prsToLoad.Select(pr =>
             GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr)));
+        StateHasChanged();
+    }
+
+    private async Task LoadCodeFlowTitlesAsync(UnifiedFlowRow row)
+    {
+        var prsToLoad = row.Prs
+            .Where(p => p.DetailsLoaded && !p.CodeFlowTitlesLoaded && p.CodeFlowPrs.Count > 0)
+            .ToList();
+
+        if (prsToLoad.Count == 0)
+            return;
+
+        await GitHubFlowService.LoadCodeFlowPrTitlesAsync(gitHubClient, prsToLoad);
         StateHasChanged();
     }
 

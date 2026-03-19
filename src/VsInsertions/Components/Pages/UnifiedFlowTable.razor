@@ -1,3 +1,4 @@
+@using Markdig
 @* Unified flow table: subscriptions grouped by connected repo with matched PRs. *@
 
 @if (PrError != null)
@@ -126,7 +127,7 @@ else
                                 @* PR link *@
                                 <td>
                                     <span title="@PrStateTooltip(primaryPr)">@PrStateEmoji(primaryPr)</span>
-                                    <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
+                                    <a href="@primaryPr.Url" target="_blank" rel="noopener noreferrer" title="@primaryPr.Title">#@primaryPr.Number</a>
                                     @if (primaryPr.Mergeable == false)
                                     {
                                         <span class="ms-1" title="Merge conflicts">⛔</span>
@@ -211,7 +212,7 @@ else
                                 <td>
                                     @if (primaryPr.State == "open" && !primaryPr.Merged)
                                     {
-                                        <button class="btn @(primaryPr.NeedsApproval ? "btn-success" : "btn-outline-success") btn-sm me-1"
+                                        <button class="btn @(primaryPr.NeedsApproval && !HasFailedChecks(primaryPr) ? "btn-success" : "btn-outline-success") btn-sm me-1"
                                                 @onclick="() => OnApprove.InvokeAsync(primaryPr)"
                                                 disabled="@(primaryPr == ActionInProgressPr)"
                                                 title="@(primaryPr.NeedsApproval ? "Approve this PR" : "Already approved — approve again")">
@@ -225,10 +226,10 @@ else
                                             }
                                         </button>
 
-                                        <button class="btn btn-primary btn-sm me-1"
+                                        <button class="btn @(primaryPr.MergeReady == true ? "btn-primary" : "btn-outline-primary") btn-sm me-1"
                                                 @onclick="() => OnMerge.InvokeAsync(primaryPr)"
                                                 disabled="@(primaryPr == ActionInProgressPr || primaryPr.Mergeable == false)"
-                                                title="@(primaryPr.Mergeable == false ? "PR is not mergeable (conflicts or requirements not met)" : "Squash-merge and delete branch")">
+                                                title="@MergeTitle(primaryPr)">
                                             @if (primaryPr == ActionInProgressPr && ActionType == "merge")
                                             {
                                                 @:Merging...
@@ -300,7 +301,7 @@ else
                                     </div>
                                     @if (row.Subscription?.Id != null)
                                     {
-                                        <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
+                                        <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank" rel="noopener noreferrer">@row.Subscription.Id</a><br/>
                                     }
                                     @if (row.ManifestCommitSha != null)
                                     {
@@ -320,7 +321,7 @@ else
                                         @if (row.SourceUpToDate == false && row.LatestSourceCommitSha != null && row.Subscription != null)
                                         {
                                             <a href="https://github.com/@row.Subscription.SourceRepoShort/compare/@row.ManifestCommitSha...@row.LatestSourceCommitSha"
-                                               target="_blank" class="ms-2" title="Compare commits on source repo">diff</a>
+                                               target="_blank" rel="noopener noreferrer" class="ms-2" title="Compare commits on source repo">diff</a>
                                         }
                                         <br/>
                                     }
@@ -330,7 +331,7 @@ else
                                         {
                                             <div class="d-flex align-items-center gap-2 mb-1">
                                                 <h6 class="mb-0">
-                                                    <a href="@pr.Url" target="_blank">#@pr.Number</a>
+                                                    <a href="@pr.Url" target="_blank" rel="noopener noreferrer">#@pr.Number</a>
                                                     @if (pr.Mergeable == false)
                                                     {
                                                         <span class="ms-1" title="Merge conflicts">⛔</span>
@@ -364,12 +365,42 @@ else
                                         }
 
                                         <strong>Title:</strong>@(" ")@pr.Title<br/>
+                                        @if (!string.IsNullOrWhiteSpace(pr.Body))
+                                        {
+                                            <details class="mb-2">
+                                                <summary><strong>Description</strong></summary>
+                                                <div class="mt-1 p-2 bg-white border rounded" style="max-height: 300px; overflow-y: auto;">
+                                                    @(RenderMarkdown(pr.Body))
+                                                </div>
+                                            </details>
+                                        }
                                         <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
                                         @if (pr.UpdatedAt.HasValue)
                                         {
                                             <text> · <strong>Updated:</strong> <span>@pr.UpdatedAt.Value.ToString("g")</span></text>
                                         }
                                         <br/>
+
+                                        @if (pr.CodeFlowPrs is { Count: > 0 })
+                                        {
+                                            <strong>Source PRs:</strong>
+                                            <ul class="mb-2">
+                                                @foreach (var cfPr in pr.CodeFlowPrs)
+                                                {
+                                                    <li>
+                                                        <a href="@cfPr.Url" target="_blank" rel="noopener noreferrer">@cfPr.Repo#@cfPr.Number</a>
+                                                        @if (cfPr.Title is not null)
+                                                        {
+                                                            <text> — @cfPr.Title</text>
+                                                        }
+                                                        @if (cfPr.Author is not null)
+                                                        {
+                                                            <small class="text-muted"> by @cfPr.Author</small>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
 
                                         @if (pr.CheckRuns is { Count: > 0 })
                                         {
@@ -385,7 +416,7 @@ else
                                                             @CheckConclusionToEmoji(check.Conclusion, check.Status)
                                                             @if (check.Url != null)
                                                             {
-                                                                <a href="@check.Url" target="_blank">@check.Name</a>
+                                                                <a href="@check.Url" target="_blank" rel="noopener noreferrer">@check.Name</a>
                                                             }
                                                             else
                                                             {
@@ -539,6 +570,16 @@ else
         _ => "Open",
     };
 
+    private static string MergeTitle(FlowPr pr) => pr switch
+    {
+        { Mergeable: false } => "PR is not mergeable (conflicts)",
+        { MergeReady: false } => $"PR is not ready to merge ({pr.MergeStateStatus})",
+        _ => "Squash-merge and delete branch",
+    };
+
+    private static bool HasFailedChecks(FlowPr pr) =>
+        pr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true;
+
     private static string ReviewStateToColor(string state) => state switch
     {
         "APPROVED" => "green",
@@ -686,4 +727,15 @@ else
             return $"{(int)duration.TotalMinutes}m {duration.Seconds}s";
         return $"{(int)duration.TotalSeconds}s";
     }
+
+    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder()
+        .UseAutoLinks()
+        .UseTaskLists()
+        .DisableHtml()
+        .Build();
+
+    private static readonly Ganss.Xss.HtmlSanitizer Sanitizer = new();
+
+    private static MarkupString RenderMarkdown(string markdown) =>
+        new(Sanitizer.Sanitize(Markdown.ToHtml(markdown, MarkdownPipeline)));
 }
