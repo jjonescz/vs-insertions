@@ -345,7 +345,64 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             })
             .ToList() ?? [];
 
+        // Extract codeflow PR references from bot comments.
+        // Carry over previously loaded titles/authors.
+        var oldCodeFlowPrs = pr.CodeFlowPrs;
+        pr.CodeFlowPrs = ParseCodeFlowPrs(commentNodes);
+        foreach (var cf in pr.CodeFlowPrs)
+        {
+            var old = oldCodeFlowPrs.FirstOrDefault(o => o.Number == cf.Number
+                && string.Equals(o.Repo, cf.Repo, StringComparison.OrdinalIgnoreCase));
+            if (old is not null)
+            {
+                cf.Title ??= old.Title;
+                cf.Author ??= old.Author;
+            }
+        }
+
         pr.DetailsLoaded = true;
+    }
+
+    // Bare URL or markdown link to a GitHub PR.
+    private static readonly Regex CodeFlowPrPattern = new(
+        @"https://github\.com/(?<owner>[^/]+)/(?<repo>[^/]+)/pull/(?<number>\d+)",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Parses codeflow PR references from bot comments that contain
+    /// "PRs from original repository included in this codeflow update".
+    /// </summary>
+    private static List<CodeFlowPr> ParseCodeFlowPrs(JsonArray? commentNodes)
+    {
+        if (commentNodes is null) return [];
+
+        var result = new List<CodeFlowPr>();
+        foreach (var c in commentNodes)
+        {
+            if (c is null) continue;
+            if (!IsBotLogin(c["author"]?["login"]?.ToString())) continue;
+
+            var body = c["body"]?.ToString();
+            if (body is null || !body.Contains("PRs from original repository", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            foreach (Match match in CodeFlowPrPattern.Matches(body))
+            {
+                var owner = match.Groups["owner"].Value;
+                var repo = match.Groups["repo"].Value;
+                var number = int.Parse(match.Groups["number"].Value);
+                if (!result.Any(p => p.Number == number && string.Equals(p.Repo, $"{owner}/{repo}", StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(new CodeFlowPr
+                    {
+                        Repo = $"{owner}/{repo}",
+                        Number = number,
+                        Url = $"https://github.com/{owner}/{repo}/pull/{number}",
+                    });
+                }
+            }
+        }
+        return result;
     }
 
     private static bool IsValidGraphQLIdentifier(string value)
@@ -417,6 +474,84 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         {
             logger.LogWarning(ex, "Failed to load check annotations for PR #{Number}", pr.Number);
             pr.AnnotationsLoaded = true;
+        }
+    }
+
+    /// <summary>
+    /// Loads titles for codeflow PRs referenced in bot comments.
+    /// </summary>
+    public async Task LoadCodeFlowPrTitlesAsync(HttpClient client, IEnumerable<FlowPr> prs)
+    {
+        try
+        {
+            var codeFlowPrs = prs
+                .Where(p => p.DetailsLoaded && !p.CodeFlowTitlesLoaded)
+                .SelectMany(p => p.CodeFlowPrs)
+                .Where(cf => cf.Title is null)
+                .DistinctBy(cf => (cf.Repo, cf.Number))
+                .ToList();
+
+            if (codeFlowPrs.Count == 0)
+            {
+                return;
+            }
+
+            var byRepo = codeFlowPrs.GroupBy(cf => cf.Repo, StringComparer.OrdinalIgnoreCase).ToList();
+            var queryParts = new List<string>();
+            int repoIdx = 0;
+            foreach (var group in byRepo)
+            {
+                var parts = group.Key.Split('/');
+                if (parts.Length != 2) continue;
+                if (!IsValidGraphQLIdentifier(parts[0]) || !IsValidGraphQLIdentifier(parts[1]))
+                    continue;
+
+                var prAliases = group.Select(cf =>
+                    $"pr_{cf.Number}: pullRequest(number: {cf.Number}) {{ title author {{ login }} }}");
+
+                queryParts.Add(
+                    $"repo_{repoIdx}: repository(owner: \"{parts[0]}\", name: \"{parts[1]}\") {{ {string.Join(" ", prAliases)} }}");
+                repoIdx++;
+            }
+
+            if (queryParts.Count == 0) { foreach (var p in prs) p.CodeFlowTitlesLoaded = true; return; }
+
+            var gqlQuery = $"{{ {string.Join(" ", queryParts)} }}";
+            var data = await ExecuteGraphQLAsync(client, gqlQuery);
+
+            if (data is not null)
+            {
+                repoIdx = 0;
+                foreach (var group in byRepo)
+                {
+                    var parts = group.Key.Split('/');
+                    if (parts.Length != 2 || !IsValidGraphQLIdentifier(parts[0]) || !IsValidGraphQLIdentifier(parts[1]))
+                        continue;
+
+                    var repoNode = data[$"repo_{repoIdx}"];
+                    if (repoNode is not null)
+                    {
+                        foreach (var cf in group)
+                        {
+                            var prNode = repoNode[$"pr_{cf.Number}"];
+                            if (prNode is not null)
+                            {
+                                cf.Title ??= prNode["title"]?.ToString();
+                                cf.Author ??= prNode["author"]?["login"]?.ToString();
+                            }
+                        }
+                    }
+                    repoIdx++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load codeflow PR titles");
+        }
+        finally
+        {
+            foreach (var p in prs) p.CodeFlowTitlesLoaded = true;
         }
     }
 
@@ -928,6 +1063,9 @@ public sealed class FlowPr
     public List<CheckRunInfo>? CheckRuns { get; set; }
     public List<PrComment>? Comments { get; set; }
     public List<PrCommit>? NonBotCommits { get; set; }
+    /// <summary>PRs from the original repository listed in codeflow update comments.</summary>
+    public List<CodeFlowPr> CodeFlowPrs { get; set; } = [];
+    public bool CodeFlowTitlesLoaded { get; set; }
     public bool AnnotationsLoaded { get; set; }
 
     /// <summary>
@@ -1036,6 +1174,15 @@ public sealed class PrCommit
     public string Author { get; set; } = "";
     public string Message { get; set; } = "";
     public DateTimeOffset CommittedAt { get; set; }
+}
+
+public sealed class CodeFlowPr
+{
+    public string Repo { get; set; } = "";
+    public int Number { get; set; }
+    public string? Title { get; set; }
+    public string? Author { get; set; }
+    public string Url { get; set; } = "";
 }
 
 public sealed class SourceManifestEntry

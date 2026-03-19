@@ -371,6 +371,27 @@ else
                                         }
                                         <br/>
 
+                                        @if (pr.CodeFlowPrs is { Count: > 0 })
+                                        {
+                                            <strong>Source PRs:</strong>
+                                            <ul class="mb-2">
+                                                @foreach (var cfPr in pr.CodeFlowPrs)
+                                                {
+                                                    <li>
+                                                        <a href="@cfPr.Url" target="_blank">@cfPr.Repo#@cfPr.Number</a>
+                                                        @if (cfPr.Title is not null)
+                                                        {
+                                                            <text> — @cfPr.Title</text>
+                                                        }
+                                                        @if (cfPr.Author is not null)
+                                                        {
+                                                            <small class="text-muted"> by @cfPr.Author</small>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+
                                         @if (pr.CheckRuns is { Count: > 0 })
                                         {
                                             var nonSuccess = pr.CheckRuns.Where(c => c.Conclusion != "success").ToList();
