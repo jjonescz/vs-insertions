@@ -127,7 +127,7 @@ else
                                 @* PR link *@
                                 <td>
                                     <span title="@PrStateTooltip(primaryPr)">@PrStateEmoji(primaryPr)</span>
-                                    <a href="@primaryPr.Url" target="_blank" title="@primaryPr.Title">#@primaryPr.Number</a>
+                                    <a href="@primaryPr.Url" target="_blank" rel="noopener noreferrer" title="@primaryPr.Title">#@primaryPr.Number</a>
                                     @if (primaryPr.Mergeable == false)
                                     {
                                         <span class="ms-1" title="Merge conflicts">⛔</span>
@@ -301,7 +301,7 @@ else
                                     </div>
                                     @if (row.Subscription?.Id != null)
                                     {
-                                        <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank">@row.Subscription.Id</a><br/>
+                                        <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank" rel="noopener noreferrer">@row.Subscription.Id</a><br/>
                                     }
                                     @if (row.ManifestCommitSha != null)
                                     {
@@ -321,7 +321,7 @@ else
                                         @if (row.SourceUpToDate == false && row.LatestSourceCommitSha != null && row.Subscription != null)
                                         {
                                             <a href="https://github.com/@row.Subscription.SourceRepoShort/compare/@row.ManifestCommitSha...@row.LatestSourceCommitSha"
-                                               target="_blank" class="ms-2" title="Compare commits on source repo">diff</a>
+                                               target="_blank" rel="noopener noreferrer" class="ms-2" title="Compare commits on source repo">diff</a>
                                         }
                                         <br/>
                                     }
@@ -331,7 +331,7 @@ else
                                         {
                                             <div class="d-flex align-items-center gap-2 mb-1">
                                                 <h6 class="mb-0">
-                                                    <a href="@pr.Url" target="_blank">#@pr.Number</a>
+                                                    <a href="@pr.Url" target="_blank" rel="noopener noreferrer">#@pr.Number</a>
                                                     @if (pr.Mergeable == false)
                                                     {
                                                         <span class="ms-1" title="Merge conflicts">⛔</span>
@@ -388,7 +388,7 @@ else
                                                 @foreach (var cfPr in pr.CodeFlowPrs)
                                                 {
                                                     <li>
-                                                        <a href="@cfPr.Url" target="_blank">@cfPr.Repo#@cfPr.Number</a>
+                                                        <a href="@cfPr.Url" target="_blank" rel="noopener noreferrer">@cfPr.Repo#@cfPr.Number</a>
                                                         @if (cfPr.Title is not null)
                                                         {
                                                             <text> — @cfPr.Title</text>
@@ -416,7 +416,7 @@ else
                                                             @CheckConclusionToEmoji(check.Conclusion, check.Status)
                                                             @if (check.Url != null)
                                                             {
-                                                                <a href="@check.Url" target="_blank">@check.Name</a>
+                                                                <a href="@check.Url" target="_blank" rel="noopener noreferrer">@check.Name</a>
                                                             }
                                                             else
                                                             {
