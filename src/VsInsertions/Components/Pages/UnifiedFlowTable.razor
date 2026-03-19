@@ -211,7 +211,7 @@ else
                                 <td>
                                     @if (primaryPr.State == "open" && !primaryPr.Merged)
                                     {
-                                        <button class="btn @(primaryPr.NeedsApproval ? "btn-success" : "btn-outline-success") btn-sm me-1"
+                                        <button class="btn @(primaryPr.NeedsApproval && !HasFailedChecks(primaryPr) ? "btn-success" : "btn-outline-success") btn-sm me-1"
                                                 @onclick="() => OnApprove.InvokeAsync(primaryPr)"
                                                 disabled="@(primaryPr == ActionInProgressPr)"
                                                 title="@(primaryPr.NeedsApproval ? "Approve this PR" : "Already approved — approve again")">
@@ -225,10 +225,10 @@ else
                                             }
                                         </button>
 
-                                        <button class="btn btn-primary btn-sm me-1"
+                                        <button class="btn @(primaryPr.MergeReady == true ? "btn-primary" : "btn-outline-primary") btn-sm me-1"
                                                 @onclick="() => OnMerge.InvokeAsync(primaryPr)"
                                                 disabled="@(primaryPr == ActionInProgressPr || primaryPr.Mergeable == false)"
-                                                title="@(primaryPr.Mergeable == false ? "PR is not mergeable (conflicts or requirements not met)" : "Squash-merge and delete branch")">
+                                                title="@MergeTitle(primaryPr)">
                                             @if (primaryPr == ActionInProgressPr && ActionType == "merge")
                                             {
                                                 @:Merging...
@@ -538,6 +538,16 @@ else
         { State: "closed" } => "Closed",
         _ => "Open",
     };
+
+    private static string MergeTitle(FlowPr pr) => pr switch
+    {
+        { Mergeable: false } => "PR is not mergeable (conflicts)",
+        { MergeReady: false } => $"PR is not ready to merge ({pr.MergeStateStatus})",
+        _ => "Squash-merge and delete branch",
+    };
+
+    private static bool HasFailedChecks(FlowPr pr) =>
+        pr.CheckRuns?.Any(c => c.Conclusion is "failure" or "cancelled" or "timed_out") == true;
 
     private static string ReviewStateToColor(string state) => state switch
     {

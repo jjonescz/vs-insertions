@@ -90,7 +90,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         if (prList.Count == 0) return;
 
         const string detailsFields = """
-            headRefOid headRefName baseRefName merged mergeable
+            headRefOid headRefName baseRefName merged mergeable mergeStateStatus
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
@@ -276,6 +276,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             "CONFLICTING" => false,
             _ => null,
         };
+        pr.MergeStateStatus = node["mergeStateStatus"]?.ToString();
 
         var reviewNodes = node["reviews"]?["nodes"]?.AsArray();
         pr.Reviews = reviewNodes?
@@ -908,6 +909,20 @@ public sealed class FlowPr
     public DateTimeOffset? UpdatedAt { get; set; }
     public bool DetailsLoaded { get; set; }
     public bool? Mergeable { get; set; }
+    /// <summary>
+    /// GitHub merge state status: CLEAN, HAS_HOOKS, UNSTABLE, BLOCKED, DIRTY, BEHIND, DRAFT, UNKNOWN.
+    /// </summary>
+    public string? MergeStateStatus { get; set; }
+
+    /// <summary>
+    /// Whether the PR is ready to merge according to GitHub (required checks passed, reviews satisfied, no conflicts).
+    /// </summary>
+    public bool? MergeReady => MergeStateStatus switch
+    {
+        "CLEAN" or "HAS_HOOKS" or "UNSTABLE" => true,
+        "BLOCKED" or "DIRTY" or "DRAFT" => false,
+        _ => null, // BEHIND, UNKNOWN, or not loaded yet
+    };
 
     public List<PrReview>? Reviews { get; set; }
     public List<CheckRunInfo>? CheckRuns { get; set; }
