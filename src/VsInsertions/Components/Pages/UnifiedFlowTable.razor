@@ -1,3 +1,4 @@
+@using Markdig
 @* Unified flow table: subscriptions grouped by connected repo with matched PRs. *@
 
 @if (PrError != null)
@@ -368,7 +369,9 @@ else
                                         {
                                             <details class="mb-2">
                                                 <summary><strong>Description</strong></summary>
-                                                <pre class="mt-1 p-2 bg-white border rounded" style="white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto;">@pr.Body</pre>
+                                                <div class="mt-1 p-2 bg-white border rounded" style="max-height: 300px; overflow-y: auto;">
+                                                    @(RenderMarkdown(pr.Body))
+                                                </div>
                                             </details>
                                         }
                                         <strong>Created:</strong> <span>@pr.CreatedAt.ToString("g")</span>
@@ -724,4 +727,13 @@ else
             return $"{(int)duration.TotalMinutes}m {duration.Seconds}s";
         return $"{(int)duration.TotalSeconds}s";
     }
+
+    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder()
+        .UseAutoLinks()
+        .UseTaskLists()
+        .DisableHtml()
+        .Build();
+
+    private static MarkupString RenderMarkdown(string markdown) =>
+        new(Markdown.ToHtml(markdown, MarkdownPipeline));
 }
