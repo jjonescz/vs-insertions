@@ -540,7 +540,8 @@ else
     }
 
     /// <summary>
-    /// Loads details for all currently displayed PRs in one batched GraphQL request.
+    /// Loads details for open PRs currently displayed in one batched GraphQL request.
+    /// Closed/merged PR details are loaded lazily when their row is expanded.
     /// Re-checks after loading in case grouping changes reveal new PRs.
     /// </summary>
     private async Task LoadDisplayedPrDetailsAsync()
@@ -548,7 +549,7 @@ else
         while (true)
         {
             var prsToLoad = unifiedRows.SelectMany(r => r.Prs)
-                .Where(p => !p.DetailsLoaded)
+                .Where(p => !p.DetailsLoaded && p.State == "open")
                 .Distinct()
                 .ToList();
             if (prsToLoad.Count == 0) break;
@@ -778,6 +779,14 @@ else
 
     private async Task OnRowExpandedAsync(UnifiedFlowRow row)
     {
+        // Load PR details for closed/merged PRs that were deferred during initial load.
+        var unloadedPrs = row.Prs.Where(p => !p.DetailsLoaded).ToList();
+        if (unloadedPrs.Count > 0)
+        {
+            await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, unloadedPrs);
+            StateHasChanged();
+        }
+
         await Task.WhenAll(
             LoadAnnotationsAsync(row),
             LoadCodeFlowTitlesAsync(row));
@@ -809,8 +818,11 @@ else
         if (prsToLoad.Count == 0)
             return;
 
-        await Task.WhenAll(prsToLoad.Select(pr =>
-            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr)));
+        await Task.WhenAll(prsToLoad.SelectMany(pr => new Task[]
+        {
+            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr),
+            GitHubFlowService.LoadAdoBuildAttemptsAsync(adoClient, pr),
+        }));
         StateHasChanged();
     }
 
