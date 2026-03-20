@@ -90,7 +90,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         if (prList.Count == 0) return;
 
         const string detailsFields = """
-            headRefOid headRefName baseRefName merged mergeable mergeStateStatus body
+            headRefOid headRefName baseRefName state merged mergeable mergeStateStatus body
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
@@ -269,6 +269,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         pr.HeadSha = node["headRefOid"]?.ToString();
         pr.SourceBranch = node["headRefName"]?.ToString();
         pr.TargetBranch = node["baseRefName"]?.ToString();
+        var state = node["state"]?.ToString();
+        if (state is not null)
+            pr.State = state == "OPEN" ? "open" : "closed";
         pr.Merged = node["merged"]?.GetValue<bool>() ?? false;
         pr.Mergeable = node["mergeable"]?.ToString() switch
         {
