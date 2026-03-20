@@ -424,6 +424,10 @@ else
                                                             }
                                                             @(" ")
                                                             <small class="text-muted">(@(check.Conclusion ?? check.Status)@(check.Duration is { } dur ? $", {FormatDuration(dur)}" : check.Status == "in_progress" && check.StartedAt is { } started ? $", running {FormatDuration(DateTimeOffset.UtcNow - started)}" : ""))</small>
+                                                            @if (check.RetryAttempt is { } attempt)
+                                                            {
+                                                                <small class="@(attempt > 1 ? "text-warning fw-bold" : "text-muted")" title="@(attempt > 1 ? "This build has been retried" : "Build attempt number")"> — attempt #@attempt</small>
+                                                            }
                                                             @if (!string.IsNullOrEmpty(check.Title))
                                                             {
                                                                 <small class="text-muted"> — @check.Title</small>
@@ -711,6 +715,8 @@ else
             var line = $"✘ {c.Name}";
             if (c.Duration is { } dur)
                 line += $" ({FormatDuration(dur)})";
+            if (c.RetryAttempt is { } attempt)
+                line += $" [attempt #{attempt}]";
             if (!string.IsNullOrEmpty(c.Title))
                 line += $" — {c.Title}";
             lines.Add(line);

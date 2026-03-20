@@ -809,8 +809,11 @@ else
         if (prsToLoad.Count == 0)
             return;
 
-        await Task.WhenAll(prsToLoad.Select(pr =>
-            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr)));
+        await Task.WhenAll(prsToLoad.SelectMany(pr => new Task[]
+        {
+            GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr),
+            GitHubFlowService.LoadAdoBuildAttemptsAsync(adoClient, pr),
+        }));
         StateHasChanged();
     }
 

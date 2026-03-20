@@ -867,6 +867,49 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         return (org, project, match.Groups[1].Value);
     }
 
+    /// <summary>
+    /// For failed AzDO check runs, loads the build attempt count from the AzDO Builds API.
+    /// </summary>
+    public async Task LoadAdoBuildAttemptsAsync(HttpClient adoClient, FlowPr pr)
+    {
+        if (pr.CheckRuns is null) return;
+
+        var adoChecks = pr.CheckRuns
+            .Where(c => c.Conclusion is "failure" or "cancelled" or "timed_out"
+                && c.RetryAttempt is null
+                && ParseAdoBuildUrl(c.Url) is not null)
+            .Select(c => (Check: c, BuildInfo: ParseAdoBuildUrl(c.Url)!.Value))
+            .DistinctBy(x => x.BuildInfo.BuildId)
+            .ToList();
+
+        if (adoChecks.Count == 0) return;
+
+        await Task.WhenAll(adoChecks.Select(async x =>
+        {
+            try
+            {
+                var (org, project, buildId) = x.BuildInfo;
+                var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}/{Uri.EscapeDataString(project)}/_apis/build/builds/{Uri.EscapeDataString(buildId)}/Timeline?api-version=7.1";
+                var json = await adoClient.GetStringAsync(url);
+                var node = JsonNode.Parse(json);
+                var records = node?["records"]?.AsArray();
+                // The attempt number is tracked per job; use the max across all jobs.
+                var attempt = records?
+                    .Where(r => r?["type"]?.ToString() == "Job")
+                    .Select(r => r!["attempt"]?.GetValue<int>() ?? 1)
+                    .DefaultIfEmpty(1)
+                    .Max() ?? 1;
+                // Apply to all check runs sharing this build ID.
+                foreach (var check in pr.CheckRuns.Where(c => ParseAdoBuildUrl(c.Url) is { } info && info.BuildId == buildId))
+                    check.RetryAttempt = attempt;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to load AzDO build attempt for {BuildId}", x.BuildInfo.BuildId);
+            }
+        }));
+    }
+
     private static bool IsBotLogin(string? login)
         => login is null || BotLogins.Contains(login);
 
@@ -1149,6 +1192,7 @@ public sealed class CheckRunInfo
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public List<CheckAnnotation> Annotations { get; set; } = [];
+    public int? RetryAttempt { get; set; } // AzDO build attempt number (1 = first run, 2+ = retried)
 
     public TimeSpan? Duration => StartedAt.HasValue && CompletedAt.HasValue
         ? CompletedAt.Value - StartedAt.Value
