@@ -511,7 +511,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                     continue;
 
                 var prAliases = group.Select(cf =>
-                    $"pr_{cf.Number}: pullRequest(number: {cf.Number}) {{ title author {{ login }} }}");
+                    $"pr_{cf.Number}: pullRequest(number: {cf.Number}) {{ title author {{ login }} createdAt }}");
 
                 queryParts.Add(
                     $"repo_{repoIdx}: repository(owner: \"{parts[0]}\", name: \"{parts[1]}\") {{ {string.Join(" ", prAliases)} }}");
@@ -542,6 +542,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                             {
                                 cf.Title ??= prNode["title"]?.ToString();
                                 cf.Author ??= prNode["author"]?["login"]?.ToString();
+                                if (cf.CreatedAt is null && DateTimeOffset.TryParse(prNode["createdAt"]?.ToString(), out var createdAt))
+                                    cf.CreatedAt = createdAt;
                             }
                         }
                     }
@@ -1231,6 +1233,7 @@ public sealed class CodeFlowPr
     public int Number { get; set; }
     public string? Title { get; set; }
     public string? Author { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
     public string Url { get; set; } = "";
 }
 

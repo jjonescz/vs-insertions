@@ -397,6 +397,10 @@ else
                                                         {
                                                             <small class="text-muted"> by @cfPr.Author</small>
                                                         }
+                                                        @if (cfPr.CreatedAt is { } cfDate)
+                                                        {
+                                                            <small class="text-muted"> (@cfDate.ToString("d"))</small>
+                                                        }
                                                     </li>
                                                 }
                                             </ul>
