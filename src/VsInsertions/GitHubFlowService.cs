@@ -361,6 +361,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             {
                 cf.Title ??= old.Title;
                 cf.Author ??= old.Author;
+                cf.CreatedAt ??= old.CreatedAt;
             }
         }
 
@@ -884,7 +885,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 && c.RetryAttempt is null
                 && ParseAdoBuildUrl(c.Url) is not null)
             .Select(c => (Check: c, BuildInfo: ParseAdoBuildUrl(c.Url)!.Value))
-            .DistinctBy(x => x.BuildInfo.BuildId)
+            .DistinctBy(x => x.BuildInfo)
             .ToList();
 
         if (adoChecks.Count == 0) return;
@@ -904,8 +905,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                     .Select(r => r!["attempt"]?.GetValue<int>() ?? 1)
                     .DefaultIfEmpty(1)
                     .Max() ?? 1;
-                // Apply to all check runs sharing this build ID.
-                foreach (var check in pr.CheckRuns.Where(c => ParseAdoBuildUrl(c.Url) is { } info && info.BuildId == buildId))
+                // Apply to all check runs sharing this org/project/build.
+                foreach (var check in pr.CheckRuns.Where(c => ParseAdoBuildUrl(c.Url) is { } info && info == (org, project, buildId)))
                     check.RetryAttempt = attempt;
             }
             catch (Exception ex)
