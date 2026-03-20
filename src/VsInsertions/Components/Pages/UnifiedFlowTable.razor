@@ -184,9 +184,12 @@ else
 
                                 @* Non-bot activity (commits + comments) *@
                                 <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="Click to expand/collapse details">
-                                    @if (!primaryPr.DetailsLoaded && primaryPr.State == "open")
+                                    @if (!primaryPr.DetailsLoaded)
                                     {
-                                        <span title="Loading details…">⏳</span>
+                                        @if (primaryPr.State == "open")
+                                        {
+                                            <span title="Loading details…">⏳</span>
+                                        }
                                     }
                                     else
                                     {
