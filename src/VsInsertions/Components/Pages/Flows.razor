@@ -64,7 +64,7 @@
         <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
             @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
         </button>
-        @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.Contains('/') == true)
         {
             <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
                 @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
@@ -171,7 +171,7 @@ else
 
     @* === Unified flows === *@
     <UnifiedFlowTable Rows="unifiedRows"
-                      PrsAvailable="@(!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)"
+                      PrsAvailable="@(!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.Contains('/') == true)"
                       PrError="@prError"
                       OutgoingPrError="@outgoingPrError"
                       ExpandedRows="expandedRows"
@@ -456,7 +456,7 @@ else
 
     private async Task AutoLoadFlowPrsAsync()
     {
-        if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.StartsWith("dotnet/") == true)
+        if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.Contains('/') == true)
         {
             // Skip loading if PRs are already cached for this repo.
             if (flowPrs != null)
