@@ -32,7 +32,6 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         IEnumerable<string> outgoingTargetRepos)
     {
         var outgoingRepos = outgoingTargetRepos
-            .Where(r => r.StartsWith("dotnet/", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
