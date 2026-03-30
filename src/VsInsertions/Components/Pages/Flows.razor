@@ -801,6 +801,7 @@ else
             pr.AnnotationsLoaded = false;
             pr.CodeFlowTitlesLoaded = false;
             pr.ChangedFilesLoaded = false;
+            pr.ChangedFiles = null;
         }
         StateHasChanged();
         await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, row.Prs);

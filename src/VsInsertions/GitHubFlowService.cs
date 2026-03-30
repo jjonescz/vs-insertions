@@ -591,6 +591,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     {
         if (pr.ChangedFilesLoaded) return;
 
+        pr.ChangedFiles = null;
+
         try
         {
             var parts = pr.Repo.Split('/');

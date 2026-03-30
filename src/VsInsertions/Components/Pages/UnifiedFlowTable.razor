@@ -467,7 +467,7 @@ else
                                             }
                                         }
 
-                                        @if (pr.ChangedFiles is { Count: > 0 })
+                                        @if (pr.ChangedFilesLoaded && pr.ChangedFiles is { Count: > 0 })
                                         {
                                             var totalAdditions = pr.ChangedFiles.Sum(f => f.Additions);
                                             var totalDeletions = pr.ChangedFiles.Sum(f => f.Deletions);
