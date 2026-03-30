@@ -132,6 +132,10 @@ else
                                     {
                                         <span class="ms-1" title="Merge conflicts">⛔</span>
                                     }
+                                    @if (primaryPr.CodeFlowBlocked)
+                                    {
+                                        <span class="ms-1" title="Codeflow blocked — opposite codeflow merged while this PR was open">🚫</span>
+                                    }
                                     @if (row.Prs.Count > 1)
                                     {
                                         <span class="badge bg-secondary ms-1" style="cursor: pointer;"

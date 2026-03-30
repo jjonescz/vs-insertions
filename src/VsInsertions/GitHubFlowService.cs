@@ -348,6 +348,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             })
             .ToList() ?? [];
 
+        // Detect codeflow-blocked bot comment.
+        pr.CodeFlowBlocked = HasCodeFlowBlockedComment(commentNodes);
+
         // Extract codeflow PR references from bot comments.
         // Carry over previously loaded titles/authors.
         var oldCodeFlowPrs = pr.CodeFlowPrs;
@@ -407,6 +410,26 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Checks whether any bot comment indicates the codeflow is blocked
+    /// (an opposite codeflow merged while the PR was open).
+    /// </summary>
+    private static bool HasCodeFlowBlockedComment(JsonArray? commentNodes)
+    {
+        if (commentNodes is null) return false;
+
+        foreach (var c in commentNodes)
+        {
+            if (c is null) continue;
+            if (!IsBotLogin(c["author"]?["login"]?.ToString())) continue;
+
+            var body = c["body"]?.ToString();
+            if (body is not null && body.Contains("codeflow cannot continue", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static bool IsValidGraphQLIdentifier(string value)
@@ -1165,6 +1188,8 @@ public sealed class FlowPr
     public List<PrCommit>? NonBotCommits { get; set; }
     /// <summary>PRs from the original repository listed in codeflow update comments.</summary>
     public List<CodeFlowPr> CodeFlowPrs { get; set; } = [];
+    /// <summary>Whether a bot comment indicates the codeflow is blocked (opposite codeflow merged).</summary>
+    public bool CodeFlowBlocked { get; set; }
     public bool CodeFlowTitlesLoaded { get; set; }
     public bool AnnotationsLoaded { get; set; }
     public List<PrChangedFile>? ChangedFiles { get; set; }
