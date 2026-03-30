@@ -348,6 +348,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             })
             .ToList() ?? [];
 
+        // Detect codeflow-blocked bot comment.
+        pr.CodeFlowBlocked = HasCodeFlowBlockedComment(commentNodes);
+
         // Extract codeflow PR references from bot comments.
         // Carry over previously loaded titles/authors.
         var oldCodeFlowPrs = pr.CodeFlowPrs;
@@ -407,6 +410,26 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Checks whether any bot comment indicates the codeflow is blocked
+    /// (an opposite codeflow merged while the PR was open).
+    /// </summary>
+    private static bool HasCodeFlowBlockedComment(JsonArray? commentNodes)
+    {
+        if (commentNodes is null) return false;
+
+        foreach (var c in commentNodes)
+        {
+            if (c is null) continue;
+            if (!IsBotLogin(c["author"]?["login"]?.ToString())) continue;
+
+            var body = c["body"]?.ToString();
+            if (body is not null && body.Contains("codeflow cannot continue", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static bool IsValidGraphQLIdentifier(string value)
@@ -558,6 +581,56 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         finally
         {
             foreach (var p in prs) p.CodeFlowTitlesLoaded = true;
+        }
+    }
+
+    /// <summary>
+    /// Loads the list of changed files for a PR via the REST API.
+    /// </summary>
+    public async Task LoadChangedFilesAsync(HttpClient client, FlowPr pr)
+    {
+        if (pr.ChangedFilesLoaded) return;
+
+        try
+        {
+            var parts = pr.Repo.Split('/');
+            if (parts.Length != 2) return;
+
+            var files = new List<PrChangedFile>();
+            var page = 1;
+            while (true)
+            {
+                var url = $"{GitHubApiBase}/repos/{parts[0]}/{parts[1]}/pulls/{pr.Number}/files?per_page=100&page={page}";
+                var json = await client.GetStringAsync(url);
+                var array = JsonNode.Parse(json)?.AsArray();
+                if (array is null || array.Count == 0) break;
+
+                foreach (var node in array)
+                {
+                    if (node is null) continue;
+                    files.Add(new PrChangedFile
+                    {
+                        Filename = node["filename"]?.ToString() ?? "",
+                        Status = node["status"]?.ToString() ?? "",
+                        Additions = node["additions"]?.GetValue<int>() ?? 0,
+                        Deletions = node["deletions"]?.GetValue<int>() ?? 0,
+                        PreviousFilename = node["previous_filename"]?.ToString(),
+                    });
+                }
+
+                if (array.Count < 100) break;
+                page++;
+            }
+
+            pr.ChangedFiles = files;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load changed files for PR {Repo}#{Number}", pr.Repo, pr.Number);
+        }
+        finally
+        {
+            pr.ChangedFilesLoaded = true;
         }
     }
 
@@ -1115,8 +1188,12 @@ public sealed class FlowPr
     public List<PrCommit>? NonBotCommits { get; set; }
     /// <summary>PRs from the original repository listed in codeflow update comments.</summary>
     public List<CodeFlowPr> CodeFlowPrs { get; set; } = [];
+    /// <summary>Whether a bot comment indicates the codeflow is blocked (opposite codeflow merged).</summary>
+    public bool CodeFlowBlocked { get; set; }
     public bool CodeFlowTitlesLoaded { get; set; }
     public bool AnnotationsLoaded { get; set; }
+    public List<PrChangedFile>? ChangedFiles { get; set; }
+    public bool ChangedFilesLoaded { get; set; }
 
     /// <summary>
     /// Whether the PR still needs approval (no non-bot user has approved, or changes were requested after last approval).
@@ -1210,6 +1287,15 @@ public sealed class CheckAnnotation
     public int? Line { get; set; }
     public string Level { get; set; } = ""; // failure, warning, notice
     public string Message { get; set; } = "";
+}
+
+public sealed class PrChangedFile
+{
+    public string Filename { get; set; } = "";
+    public string Status { get; set; } = ""; // added, removed, modified, renamed, copied, changed, unchanged
+    public int Additions { get; set; }
+    public int Deletions { get; set; }
+    public string? PreviousFilename { get; set; }
 }
 
 public sealed class PrComment

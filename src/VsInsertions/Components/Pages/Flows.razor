@@ -789,7 +789,8 @@ else
 
         await Task.WhenAll(
             LoadAnnotationsAsync(row),
-            LoadCodeFlowTitlesAsync(row));
+            LoadCodeFlowTitlesAsync(row),
+            LoadChangedFilesAsync(row));
     }
 
     private async Task RefreshRowAsync(UnifiedFlowRow row)
@@ -799,13 +800,15 @@ else
             pr.DetailsLoaded = false;
             pr.AnnotationsLoaded = false;
             pr.CodeFlowTitlesLoaded = false;
+            pr.ChangedFilesLoaded = false;
         }
         StateHasChanged();
         await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, row.Prs);
         StateHasChanged();
         await Task.WhenAll(
             LoadAnnotationsAsync(row),
-            LoadCodeFlowTitlesAsync(row));
+            LoadCodeFlowTitlesAsync(row),
+            LoadChangedFilesAsync(row));
     }
 
     private async Task LoadAnnotationsAsync(UnifiedFlowRow row)
@@ -836,6 +839,19 @@ else
             return;
 
         await GitHubFlowService.LoadCodeFlowPrTitlesAsync(gitHubClient, prsToLoad);
+        StateHasChanged();
+    }
+
+    private async Task LoadChangedFilesAsync(UnifiedFlowRow row)
+    {
+        var prsToLoad = row.Prs
+            .Where(p => p.DetailsLoaded && !p.ChangedFilesLoaded)
+            .ToList();
+
+        if (prsToLoad.Count == 0)
+            return;
+
+        await Task.WhenAll(prsToLoad.Select(pr => GitHubFlowService.LoadChangedFilesAsync(gitHubClient, pr)));
         StateHasChanged();
     }
 

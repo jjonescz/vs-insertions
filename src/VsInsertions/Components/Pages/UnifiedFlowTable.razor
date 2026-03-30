@@ -132,6 +132,10 @@ else
                                     {
                                         <span class="ms-1" title="Merge conflicts">⛔</span>
                                     }
+                                    @if (primaryPr.CodeFlowBlocked)
+                                    {
+                                        <span class="ms-1" title="Codeflow blocked — opposite codeflow merged while this PR was open">🚫</span>
+                                    }
                                     @if (row.Prs.Count > 1)
                                     {
                                         <span class="badge bg-secondary ms-1" style="cursor: pointer;"
@@ -463,6 +467,43 @@ else
                                             }
                                         }
 
+                                        @if (pr.ChangedFiles is { Count: > 0 })
+                                        {
+                                            var totalAdditions = pr.ChangedFiles.Sum(f => f.Additions);
+                                            var totalDeletions = pr.ChangedFiles.Sum(f => f.Deletions);
+                                            <details class="mb-2">
+                                                <summary>
+                                                    <strong>Changed files</strong>
+                                                    <small class="text-muted">
+                                                        (@pr.ChangedFiles.Count file(s),
+                                                        <span class="text-success">+@totalAdditions</span>
+                                                        <span class="text-danger">−@totalDeletions</span>)
+                                                    </small>
+                                                </summary>
+                                                <ul class="mt-1 mb-0" style="list-style: none; padding-left: 0.5em;">
+                                                    @foreach (var file in pr.ChangedFiles)
+                                                    {
+                                                        <li>
+                                                            <small>
+                                                                <span title="@file.Status">@FileStatusEmoji(file.Status)</span>
+                                                                <code>@file.Filename</code>
+                                                                @if (file.PreviousFilename is not null)
+                                                                {
+                                                                    <text> ← <code>@file.PreviousFilename</code></text>
+                                                                }
+                                                                <span class="text-success ms-1">+@file.Additions</span>
+                                                                <span class="text-danger">−@file.Deletions</span>
+                                                            </small>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </details>
+                                        }
+                                        else if (!pr.ChangedFilesLoaded)
+                                        {
+                                            <div class="text-muted mb-2">⏳ Loading changed files…</div>
+                                        }
+
                                         @if (pr.NonBotCommits is { Count: > 0 })
                                         {
                                             <strong>Commits (non-bot):</strong>
@@ -751,4 +792,14 @@ else
 
     private static MarkupString RenderMarkdown(string markdown) =>
         new(Sanitizer.Sanitize(Markdown.ToHtml(markdown, MarkdownPipeline)));
+
+    private static string FileStatusEmoji(string status) => status switch
+    {
+        "added" => "🟢",
+        "removed" => "🔴",
+        "modified" => "📝",
+        "renamed" => "📛",
+        "copied" => "📋",
+        _ => "•",
+    };
 }
