@@ -89,7 +89,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         if (prList.Count == 0) return;
 
         const string detailsFields = """
-            headRefOid headRefName baseRefName state merged mergeable mergeStateStatus body
+            headRefOid headRefName baseRefName state merged mergeable mergeStateStatus reviewDecision body
             reviews(first: 100) { nodes { author { login avatarUrl } state submittedAt } }
             commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
                 ... on CheckRun { id databaseId name status conclusion detailsUrl title startedAt completedAt }
@@ -279,6 +279,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             _ => null,
         };
         pr.MergeStateStatus = node["mergeStateStatus"]?.ToString();
+        pr.ReviewDecision = node["reviewDecision"]?.ToString();
         pr.Body = node["body"]?.ToString();
 
         var reviewNodes = node["reviews"]?["nodes"]?.AsArray();
@@ -1184,6 +1185,11 @@ public sealed class FlowPr
         _ => null, // BEHIND, UNKNOWN, or not loaded yet
     };
 
+    /// <summary>
+    /// GitHub review decision: APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or null (no review policy).
+    /// Unlike <see cref="Reviews"/>, this accounts for stale review dismissal.
+    /// </summary>
+    public string? ReviewDecision { get; set; }
     public List<PrReview>? Reviews { get; set; }
     public List<CheckRunInfo>? CheckRuns { get; set; }
     public List<PrComment>? Comments { get; set; }
@@ -1198,9 +1204,11 @@ public sealed class FlowPr
     public bool ChangedFilesLoaded { get; set; }
 
     /// <summary>
-    /// Whether the PR still needs approval (no non-bot user has approved, or changes were requested after last approval).
+    /// Whether the PR still needs approval (no non-bot user has approved, changes were requested,
+    /// or a previous approval was dismissed as stale by branch protection).
     /// </summary>
     public bool NeedsApproval =>
+        ReviewDecision is "REVIEW_REQUIRED" or "CHANGES_REQUESTED" ||
         Reviews is null or { Count: 0 } ||
         !Reviews
             .GroupBy(r => r.Author)
