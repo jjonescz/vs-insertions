@@ -31,7 +31,7 @@
 
         <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
 
-        <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
+        <button class="btn btn-outline-danger me-2" @onclick="ToggleEditMode"
                 title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
             @if (!editMode)
             {
@@ -42,6 +42,20 @@
                 @:Readonly mode
             }
         </button>
+
+        @if (editMode && selectedInsertionIds.Count > 0)
+        {
+            <button class="btn btn-danger me-2" @onclick="AbandonSelectedAsync" disabled="@abandoningSelected">
+                @if (abandoningSelected)
+                {
+                    @:Abandoning...
+                }
+                else
+                {
+                    @:Abandon selected (@selectedInsertionIds.Count)
+                }
+            </button>
+        }
 
         @if (loading)
         {
@@ -65,7 +79,7 @@ else if (insertions == null)
 else
 {
     <label>Repo:</label>
-    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo" @bind:after="AutoLoadRps">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo" @bind:after="OnFilterChanged">
         @foreach (var repo in insertions.Select(x => x.Repo).Distinct())
         {
             <option value="@repo">@repo</option>
@@ -73,7 +87,7 @@ else
     </select>
 
     <label>Target:</label>
-    <select class="form-select d-inline-block w-auto me-3" @bind="currentTargetBranch" @bind:after="AutoLoadRps">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentTargetBranch" @bind:after="OnFilterChanged">
         @foreach (var branch in insertions.Select(x => x.TargetBranch).Distinct())
         {
             <option value="@branch">@branch</option>
@@ -99,21 +113,21 @@ else
         <span class="me-2">Display:</span>
 
         <div class="form-check form-check-inline" title="Display PR validations">
-            <input class="form-check-input" type="checkbox" id="displayPrs" @bind="displayPrs">
+            <input class="form-check-input" type="checkbox" id="displayPrs" @bind="displayPrs" @bind:after="ClearSelection">
             <label class="form-check-label" for="displayPrs">
                 PRs
             </label>
         </div>
 
         <div class="form-check form-check-inline" title="Display draft PRs">
-            <input class="form-check-input" type="checkbox" id="displayDrafts" @bind="displayDrafts">
+            <input class="form-check-input" type="checkbox" id="displayDrafts" @bind="displayDrafts" @bind:after="ClearSelection">
             <label class="form-check-label" for="displayDrafts">
                 Drafts
             </label>
         </div>
 
         <div class="form-check form-check-inline" title="Display inactive (abandoned, completed) PRs">
-            <input class="form-check-input" type="checkbox" id="displayInactive" @bind="displayInactive">
+            <input class="form-check-input" type="checkbox" id="displayInactive" @bind="displayInactive" @bind:after="ClearSelection">
             <label class="form-check-label" for="displayInactive">
                 Inactive
             </label>
@@ -130,8 +144,15 @@ else
     <table class="table table-hover w-auto align-middle">
         <thead>
             <tr>
+                @if (editMode)
+                {
+                    <th scope="col">
+                        <input type="checkbox" @bind="selectAll" @bind:after="ToggleSelectAll" title="Select all" />
+                    </th>
+                }
                 <th scope="col" title="PR number">PR #</th>
                 <th scope="col" title="PR status">S</th>
+                <th scope="col" title="Merge status">M</th>
                 <th scope="col" title="Draft?">D</th>
                 <th scope="col" title="Reviewers">R</th>
                 <th scope="col" title="Title prefix">Prefix</th>
@@ -152,8 +173,17 @@ else
             @foreach (var insertion in insertions.Where(ShouldDisplayInsertion).OrderByDescending(GetInsertionSortKey))
             {
                 <tr>
+                    @if (editMode)
+                    {
+                        <td>
+                            <input type="checkbox" checked="@IsSelected(insertion)"
+                                   disabled="@(insertion.Status != PullRequestStatus.Active)"
+                                   @onchange="@(e => ToggleSelection(insertion, bool.TryParse(e.Value?.ToString(), out var isChecked) && isChecked))" />
+                        </td>
+                    }
                     <th scope="row" title="PR number">@insertion.PullRequestId</th>
                     <td title="@insertion.Status">@StatusToEmoji(insertion.Status)</td>
+                    <td title="Merge status: @insertion.MergeStatus">@MergeStatusToEmoji(insertion.MergeStatus)</td>
                     <td title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</td>
 
                     <td>
@@ -247,6 +277,9 @@ else
     private bool started;
     private bool loading;
     private bool editMode;
+    private bool abandoningSelected;
+    private bool selectAll;
+    private readonly HashSet<string> selectedInsertionIds = new();
     private bool displayPrs = false, displayDrafts = true, displayInactive = true;
     private StatusFilter statusFilter;
     private SortCriterion sortBy = SortCriterion.BuildNumber;
@@ -379,6 +412,90 @@ else
         }
     }
 
+    private void ToggleEditMode()
+    {
+        editMode = !editMode;
+        if (!editMode)
+        {
+            selectedInsertionIds.Clear();
+            selectAll = false;
+        }
+    }
+
+    private void OnFilterChanged()
+    {
+        ClearSelection();
+        AutoLoadRps();
+    }
+
+    private void ClearSelection()
+    {
+        selectedInsertionIds.Clear();
+        selectAll = false;
+    }
+
+    private bool IsSelected(VsInsertion insertion) => selectedInsertionIds.Contains(insertion.PullRequestId);
+
+    private void ToggleSelection(VsInsertion insertion, bool selected)
+    {
+        if (selected)
+        {
+            selectedInsertionIds.Add(insertion.PullRequestId);
+        }
+        else
+        {
+            selectedInsertionIds.Remove(insertion.PullRequestId);
+            selectAll = false;
+        }
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (insertions == null) return;
+
+        if (selectAll)
+        {
+            foreach (var insertion in insertions.Where(ShouldDisplayInsertion))
+            {
+                if (insertion.Status == PullRequestStatus.Active)
+                {
+                    selectedInsertionIds.Add(insertion.PullRequestId);
+                }
+            }
+        }
+        else
+        {
+            selectedInsertionIds.Clear();
+        }
+    }
+
+    private async Task AbandonSelectedAsync()
+    {
+        if (insertions == null) return;
+
+        abandoningSelected = true;
+        StateHasChanged();
+        try
+        {
+            var toAbandon = insertions
+                .Where(i => selectedInsertionIds.Contains(i.PullRequestId) && i.Status == PullRequestStatus.Active)
+                .ToList();
+
+            foreach (var insertion in toAbandon)
+            {
+                await insertion.AbandonAsync();
+            }
+
+            selectedInsertionIds.Clear();
+            selectAll = false;
+        }
+        finally
+        {
+            abandoningSelected = false;
+            StateHasChanged();
+        }
+    }
+
     private void RefreshRps()
     {
         if (insertions != null)
@@ -406,6 +523,7 @@ else
         public ParsedTitle? ParsedTitle => (_parsedTitle ??= page.TitleParser.Parse(Title));
         public PullRequestStatus Status { get; private set; } = Enum.Parse<PullRequestStatus>(node["status"]!.ToString(), ignoreCase: true);
         public bool IsDraft => (bool)node["isDraft"]!;
+        public string MergeStatus => node["mergeStatus"]?.ToString() ?? "unknown";
         public string? Prefix => ParsedTitle?.Prefix.Trim('[', ']');
         public string Repo
         {
@@ -572,6 +690,14 @@ else
     {
         true => "🔘", // white circle
         false => "⚫", // black circle
+    };
+
+    static string MergeStatusToEmoji(string mergeStatus) => mergeStatus switch
+    {
+        "conflicts" => "⚠️",
+        "succeeded" => "✅",
+        "failure" => "❌",
+        _ => "",
     };
 
     enum Vote
