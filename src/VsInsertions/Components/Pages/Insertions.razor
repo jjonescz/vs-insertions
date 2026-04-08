@@ -79,7 +79,7 @@ else if (insertions == null)
 else
 {
     <label>Repo:</label>
-    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo" @bind:after="AutoLoadRps">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentRepo" @bind:after="OnFilterChanged">
         @foreach (var repo in insertions.Select(x => x.Repo).Distinct())
         {
             <option value="@repo">@repo</option>
@@ -87,7 +87,7 @@ else
     </select>
 
     <label>Target:</label>
-    <select class="form-select d-inline-block w-auto me-3" @bind="currentTargetBranch" @bind:after="AutoLoadRps">
+    <select class="form-select d-inline-block w-auto me-3" @bind="currentTargetBranch" @bind:after="OnFilterChanged">
         @foreach (var branch in insertions.Select(x => x.TargetBranch).Distinct())
         {
             <option value="@branch">@branch</option>
@@ -113,21 +113,21 @@ else
         <span class="me-2">Display:</span>
 
         <div class="form-check form-check-inline" title="Display PR validations">
-            <input class="form-check-input" type="checkbox" id="displayPrs" @bind="displayPrs">
+            <input class="form-check-input" type="checkbox" id="displayPrs" @bind="displayPrs" @bind:after="ClearSelection">
             <label class="form-check-label" for="displayPrs">
                 PRs
             </label>
         </div>
 
         <div class="form-check form-check-inline" title="Display draft PRs">
-            <input class="form-check-input" type="checkbox" id="displayDrafts" @bind="displayDrafts">
+            <input class="form-check-input" type="checkbox" id="displayDrafts" @bind="displayDrafts" @bind:after="ClearSelection">
             <label class="form-check-label" for="displayDrafts">
                 Drafts
             </label>
         </div>
 
         <div class="form-check form-check-inline" title="Display inactive (abandoned, completed) PRs">
-            <input class="form-check-input" type="checkbox" id="displayInactive" @bind="displayInactive">
+            <input class="form-check-input" type="checkbox" id="displayInactive" @bind="displayInactive" @bind:after="ClearSelection">
             <label class="form-check-label" for="displayInactive">
                 Inactive
             </label>
@@ -177,7 +177,8 @@ else
                     {
                         <td>
                             <input type="checkbox" checked="@IsSelected(insertion)"
-                                   @onchange="@(e => ToggleSelection(insertion, (bool)e.Value!))" />
+                                   disabled="@(insertion.Status != PullRequestStatus.Active)"
+                                   @onchange="@(e => ToggleSelection(insertion, bool.TryParse(e.Value?.ToString(), out var isChecked) && isChecked))" />
                         </td>
                     }
                     <th scope="row" title="PR number">@insertion.PullRequestId</th>
@@ -419,6 +420,18 @@ else
             selectedInsertionIds.Clear();
             selectAll = false;
         }
+    }
+
+    private void OnFilterChanged()
+    {
+        ClearSelection();
+        AutoLoadRps();
+    }
+
+    private void ClearSelection()
+    {
+        selectedInsertionIds.Clear();
+        selectAll = false;
     }
 
     private bool IsSelected(VsInsertion insertion) => selectedInsertionIds.Contains(insertion.PullRequestId);
