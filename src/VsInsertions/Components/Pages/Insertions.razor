@@ -31,7 +31,7 @@
 
         <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
 
-        <button class="btn btn-outline-danger me-2" @onclick="@(() => editMode = !editMode)"
+        <button class="btn btn-outline-danger me-2" @onclick="ToggleEditMode"
                 title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
             @if (!editMode)
             {
@@ -42,6 +42,20 @@
                 @:Readonly mode
             }
         </button>
+
+        @if (editMode && selectedInsertionIds.Count > 0)
+        {
+            <button class="btn btn-danger me-2" @onclick="AbandonSelectedAsync" disabled="@abandoningSelected">
+                @if (abandoningSelected)
+                {
+                    @:Abandoning...
+                }
+                else
+                {
+                    @:Abandon selected (@selectedInsertionIds.Count)
+                }
+            </button>
+        }
 
         @if (loading)
         {
@@ -130,6 +144,12 @@ else
     <table class="table table-hover w-auto align-middle">
         <thead>
             <tr>
+                @if (editMode)
+                {
+                    <th scope="col">
+                        <input type="checkbox" @bind="selectAll" @bind:after="ToggleSelectAll" title="Select all" />
+                    </th>
+                }
                 <th scope="col" title="PR number">PR #</th>
                 <th scope="col" title="PR status">S</th>
                 <th scope="col" title="Draft?">D</th>
@@ -152,6 +172,13 @@ else
             @foreach (var insertion in insertions.Where(ShouldDisplayInsertion).OrderByDescending(GetInsertionSortKey))
             {
                 <tr>
+                    @if (editMode)
+                    {
+                        <td>
+                            <input type="checkbox" checked="@IsSelected(insertion)"
+                                   @onchange="@(e => ToggleSelection(insertion, (bool)e.Value!))" />
+                        </td>
+                    }
                     <th scope="row" title="PR number">@insertion.PullRequestId</th>
                     <td title="@insertion.Status">@StatusToEmoji(insertion.Status)</td>
                     <td title="Draft? @insertion.IsDraft">@IsDraftToEmoji(insertion.IsDraft)</td>
@@ -247,6 +274,9 @@ else
     private bool started;
     private bool loading;
     private bool editMode;
+    private bool abandoningSelected;
+    private bool selectAll;
+    private readonly HashSet<string> selectedInsertionIds = new();
     private bool displayPrs = false, displayDrafts = true, displayInactive = true;
     private StatusFilter statusFilter;
     private SortCriterion sortBy = SortCriterion.BuildNumber;
@@ -376,6 +406,78 @@ else
                     break;
                 }
             }
+        }
+    }
+
+    private void ToggleEditMode()
+    {
+        editMode = !editMode;
+        if (!editMode)
+        {
+            selectedInsertionIds.Clear();
+            selectAll = false;
+        }
+    }
+
+    private bool IsSelected(VsInsertion insertion) => selectedInsertionIds.Contains(insertion.PullRequestId);
+
+    private void ToggleSelection(VsInsertion insertion, bool selected)
+    {
+        if (selected)
+        {
+            selectedInsertionIds.Add(insertion.PullRequestId);
+        }
+        else
+        {
+            selectedInsertionIds.Remove(insertion.PullRequestId);
+            selectAll = false;
+        }
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (insertions == null) return;
+
+        if (selectAll)
+        {
+            foreach (var insertion in insertions.Where(ShouldDisplayInsertion))
+            {
+                if (insertion.Status == PullRequestStatus.Active)
+                {
+                    selectedInsertionIds.Add(insertion.PullRequestId);
+                }
+            }
+        }
+        else
+        {
+            selectedInsertionIds.Clear();
+        }
+    }
+
+    private async Task AbandonSelectedAsync()
+    {
+        if (insertions == null) return;
+
+        abandoningSelected = true;
+        StateHasChanged();
+        try
+        {
+            var toAbandon = insertions
+                .Where(i => selectedInsertionIds.Contains(i.PullRequestId) && i.Status == PullRequestStatus.Active)
+                .ToList();
+
+            foreach (var insertion in toAbandon)
+            {
+                await insertion.AbandonAsync();
+            }
+
+            selectedInsertionIds.Clear();
+            selectAll = false;
+        }
+        finally
+        {
+            abandoningSelected = false;
+            StateHasChanged();
         }
     }
 
