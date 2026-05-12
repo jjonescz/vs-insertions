@@ -21,7 +21,7 @@ public sealed class RepoPrCache
 /// </summary>
 public sealed class FlowsState
 {
-    public string? AdoAccessToken { get; set; }
+    public Dictionary<string, string> AdoAccessTokens { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? GitHubPatToken { get; set; }
     public MaestroConfig? Config { get; set; }
     public List<string> Repos { get; set; } = [];

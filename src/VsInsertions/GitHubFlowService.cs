@@ -733,7 +733,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         string owner,
         string repo,
         FlowPr pr,
-        HttpClient? adoClient = null)
+        Func<string, HttpClient?>? getAdoClient = null)
     {
         if (string.IsNullOrEmpty(pr.HeadSha))
             return (false, "No head SHA available for this PR.");
@@ -823,13 +823,21 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 // Handle before the check-suite dedup because multiple ADO pipeline runs
                 // share the same check suite (one suite per GitHub App per commit).
                 // ADO builds are deduped by build ID instead.
-                if (appSlug == "azure-pipelines" && adoClient is not null)
+                if (appSlug == "azure-pipelines")
                 {
                     var detailsUrl = detailNode?["details_url"]?.ToString();
                     var buildInfo = ParseAdoBuildUrl(detailsUrl);
                     if (buildInfo is not null && !retriedAdoBuildIds.Contains(buildInfo.Value.BuildId))
                     {
                         var (org, project, buildId) = buildInfo.Value;
+                        var adoClient = getAdoClient?.Invoke(org);
+                        if (adoClient is null)
+                        {
+                            errors.Add($"{checkRun.Name}: Missing Azure DevOps PAT for {org}.");
+                            retriedAdoBuildIds.Add(buildId);
+                            continue;
+                        }
+
                         var retryUrl = $"https://dev.azure.com/{org}/{project}/_apis/build/builds/{buildId}?retry=true&api-version=7.1";
                         using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
                         using var response = await adoClient.PatchAsync(retryUrl, content);
@@ -951,7 +959,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     /// <summary>
     /// For failed AzDO check runs, loads the build attempt count from the AzDO Builds API.
     /// </summary>
-    public async Task LoadAdoBuildAttemptsAsync(HttpClient adoClient, FlowPr pr)
+    public async Task LoadAdoBuildAttemptsAsync(Func<string, HttpClient?> getAdoClient, FlowPr pr)
     {
         if (pr.CheckRuns is null) return;
 
@@ -970,6 +978,10 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
             try
             {
                 var (org, project, buildId) = x.BuildInfo;
+                var adoClient = getAdoClient(org);
+                if (adoClient is null)
+                    return;
+
                 var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}/{Uri.EscapeDataString(project)}/_apis/build/builds/{Uri.EscapeDataString(buildId)}/Timeline?api-version=7.1";
                 var json = await adoClient.GetStringAsync(url);
                 var node = JsonNode.Parse(json);
