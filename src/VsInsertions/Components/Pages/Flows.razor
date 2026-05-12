@@ -43,8 +43,9 @@
     var fullyLoggedIn = !string.IsNullOrEmpty(adoAccessToken) && browser
         && (!string.IsNullOrEmpty(gitHubToken) || !string.IsNullOrEmpty(gitHubPatToken));
 
-    RenderFragment adoLogin = @<AdoLogin Organization="dnceng" CookieName="flows_ado_token"
-              AccessToken="@adoAccessToken" AccessTokenChanged="HandleAdoTokenChanged"
+    RenderFragment adoLogin = @<AdoLogin Organization="@PrimaryAdoOrganization" CookieName="flows_ado_token"
+              AccessTokens="@adoAccessTokens" AccessTokensChanged="HandleAdoTokensChanged"
+              OrganizationOptions="AdoOrganizationOptions"
               LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />;
 
     RenderFragment gitHubStatus = @<text>
@@ -197,18 +198,23 @@ else
     private HashSet<string> collapsedGroups = new(StringComparer.OrdinalIgnoreCase);
     private List<string> recentRepos = [];
     private const int MaxRecentRepos = 5;
+    private const string PrimaryAdoOrganization = "dnceng";
+    private static readonly string[] AdoOrganizationOptions = [PrimaryAdoOrganization, "devdiv", "dnceng-public"];
     private const string FavoriteReposCookieName = "flows_favorite_repos";
     private const string RecentReposCookieName = "flows_recent_repos";
     private const string CollapsedGroupsCookieName = "flows_collapsed_groups";
-    private string? adoAccessToken;
+    private Dictionary<string, string> adoAccessTokens = new(StringComparer.OrdinalIgnoreCase);
     private string? gitHubToken;
     private string? gitHubUser;
     private string? gitHubPatToken;
     private string? gitHubPatInput;
-    private HttpClient adoClient = new();
+    private readonly Lock adoClientLock = new();
+    private readonly Dictionary<string, HttpClient> adoClients = new(StringComparer.OrdinalIgnoreCase);
     private HttpClient gitHubClient = new();
     private GitHubRateLimitHandler? rateLimitHandler;
     private bool rateLimitWaiting;
+
+    private string? adoAccessToken => GetAdoTokenForOrganization(PrimaryAdoOrganization);
 
     /// <summary>Effective GitHub token: OAuth takes priority, PAT is fallback.</summary>
     private string? effectiveGitHubToken => gitHubToken ?? gitHubPatToken;
@@ -263,6 +269,11 @@ else
             .ToList();
 
     // === Lifecycle ===
+    protected override void OnInitialized()
+    {
+        adoAccessTokens = new Dictionary<string, string>(FlowsState.AdoAccessTokens, StringComparer.OrdinalIgnoreCase);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (scrollToAlert)
@@ -306,18 +317,51 @@ else
     }
 
     // === ADO Auth ===
-    private async Task HandleAdoTokenChanged(string? token)
+    private async Task HandleAdoTokensChanged(Dictionary<string, string> tokens)
     {
-        adoAccessToken = token;
-        if (token != null)
+        var updatedTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
+        string? previousPrimaryToken;
+        bool tokensChanged;
+        List<HttpClient> clientsToDispose;
+        lock (adoClientLock)
+        {
+            previousPrimaryToken = adoAccessTokens.TryGetValue(PrimaryAdoOrganization, out var token) ? token : null;
+            tokensChanged = !AreAdoTokenSetsEqual(adoAccessTokens, updatedTokens);
+            if (!tokensChanged)
+            {
+                clientsToDispose = [];
+            }
+            else
+            {
+                adoAccessTokens = updatedTokens;
+                clientsToDispose = adoClients.Values.ToList();
+                adoClients.Clear();
+            }
+
+            FlowsState.AdoAccessTokens = new Dictionary<string, string>(adoAccessTokens, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (!tokensChanged)
+        {
+            if (config is null && !loadingSubscriptions && adoAccessToken is not null)
+            {
+                await LoadSubscriptionsAsync();
+            }
+
+            return;
+        }
+
+        DisposeAdoClients(clientsToDispose);
+
+        if (adoAccessToken != null)
         {
             subscriptionError = null;
-            if (FlowsState.AdoAccessToken != token)
+            if (!string.Equals(previousPrimaryToken, adoAccessToken, StringComparison.Ordinal))
             {
-                FlowsState.AdoAccessToken = token;
                 config = null;
+                ClearFlowPrState();
             }
-            SetupAdoClient();
+
             if (config == null)
             {
                 await LoadSubscriptionsAsync();
@@ -325,16 +369,74 @@ else
         }
         else
         {
-            FlowsState.AdoAccessToken = null;
             config = null;
             ClearFlowPrState();
         }
     }
 
-    private void SetupAdoClient()
+    private HttpClient? GetAdoClientForOrganization(string organization)
     {
-        adoClient = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.ADO")));
-        adoClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {adoAccessToken}");
+        lock (adoClientLock)
+        {
+            if (!adoAccessTokens.TryGetValue(organization, out var token))
+                return null;
+
+            if (!adoClients.TryGetValue(organization, out var client))
+            {
+                client = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger($"HTTP.ADO.{organization}")));
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+                adoClients[organization] = client;
+            }
+
+            return client;
+        }
+    }
+
+    private string? GetAdoTokenForOrganization(string organization)
+    {
+        lock (adoClientLock)
+        {
+            return adoAccessTokens.TryGetValue(organization, out var token) ? token : null;
+        }
+    }
+
+    private void ClearAdoClients()
+    {
+        List<HttpClient> clients;
+        lock (adoClientLock)
+        {
+            clients = adoClients.Values.ToList();
+            adoClients.Clear();
+        }
+
+        DisposeAdoClients(clients);
+    }
+
+    private static void DisposeAdoClients(IEnumerable<HttpClient> clients)
+    {
+        foreach (var client in clients)
+        {
+            client.Dispose();
+        }
+    }
+
+    private static bool AreAdoTokenSetsEqual(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        foreach (var (organization, token) in left)
+        {
+            if (!right.TryGetValue(organization, out var otherToken)
+                || !string.Equals(token, otherToken, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void SetupGitHubClient()
@@ -425,7 +527,15 @@ else
 
         try
         {
+            var adoClient = GetAdoClientForOrganization(PrimaryAdoOrganization);
+            if (adoClient is null)
+            {
+                subscriptionError = $"A {PrimaryAdoOrganization} Azure DevOps PAT is required to load subscriptions.";
+                return;
+            }
+
             config = await MaestroConfigService.GetConfigAsync(adoClient);
+
             repos = MaestroConfigService.GetUniqueRepos(config.Subscriptions);
             if (repos.Count > 0 && (currentRepo == null || !repos.Contains(currentRepo)))
             {
@@ -701,7 +811,8 @@ else
 
         try
         {
-            var (success, message) = await GitHubFlowService.RetryCiAsync(gitHubClient, parts[0], parts[1], pr, adoClient);
+            var (success, message) = await GitHubFlowService.RetryCiAsync(
+                gitHubClient, parts[0], parts[1], pr, GetAdoClientForOrganization);
             actionSuccess = success;
             actionMessage = message;
 
@@ -825,7 +936,7 @@ else
         await Task.WhenAll(prsToLoad.SelectMany(pr => new Task[]
         {
             GitHubFlowService.LoadCheckAnnotationsAsync(gitHubClient, pr),
-            GitHubFlowService.LoadAdoBuildAttemptsAsync(adoClient, pr),
+            GitHubFlowService.LoadAdoBuildAttemptsAsync(GetAdoClientForOrganization, pr),
         }));
         StateHasChanged();
     }
@@ -1217,5 +1328,6 @@ else
     {
         retryCiRefreshCts?.Cancel();
         retryCiRefreshCts?.Dispose();
+        ClearAdoClients();
     }
 }

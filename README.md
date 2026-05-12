@@ -9,8 +9,5 @@ Fill the following in `secrets.json` (get its path via `dotnet user-secrets --pr
   - `GitHub:ClientId`
   - `GitHub:ClientSecret`
 
-Open in Visual Studio and press <kbd>F5</kbd> or if you prefer command line:
-
-```ps1
-$env:DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1; dotnet watch -lp https --project src/VsInsertions
-```
+Open in Visual Studio and start the app (<kbd>F5</kbd>)
+or in VSCode and run the build task (<kbd>Ctrl+Shift+B</kbd>).
