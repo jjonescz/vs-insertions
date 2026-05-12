@@ -209,6 +209,7 @@ else
     private string? gitHubPatToken;
     private string? gitHubPatInput;
     private HttpClient adoClient = new();
+    private readonly Lock adoClientLock = new();
     private readonly Dictionary<string, HttpClient> adoClients = new(StringComparer.OrdinalIgnoreCase);
     private HttpClient gitHubClient = new();
     private GitHubRateLimitHandler? rateLimitHandler;
@@ -314,10 +315,18 @@ else
     // === ADO Auth ===
     private async Task HandleAdoTokensChanged(Dictionary<string, string> tokens)
     {
-        var previousPrimaryToken = GetAdoTokenForOrganization(PrimaryAdoOrganization);
-        adoAccessTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
-        FlowsState.AdoAccessTokens = new Dictionary<string, string>(adoAccessTokens, StringComparer.OrdinalIgnoreCase);
-        adoClients.Clear();
+        string? previousPrimaryToken;
+        List<HttpClient> clientsToDispose;
+        lock (adoClientLock)
+        {
+            previousPrimaryToken = adoAccessTokens.TryGetValue(PrimaryAdoOrganization, out var token) ? token : null;
+            adoAccessTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
+            FlowsState.AdoAccessTokens = new Dictionary<string, string>(adoAccessTokens, StringComparer.OrdinalIgnoreCase);
+            clientsToDispose = adoClients.Values.ToList();
+            adoClients.Clear();
+        }
+
+        DisposeAdoClients(clientsToDispose);
         SetupAdoClient();
 
         if (adoAccessToken != null)
@@ -348,22 +357,49 @@ else
 
     private HttpClient? GetAdoClientForOrganization(string organization)
     {
-        var token = GetAdoTokenForOrganization(organization);
-        if (token is null)
-            return null;
-
-        if (!adoClients.TryGetValue(organization, out var client))
+        lock (adoClientLock)
         {
-            client = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger($"HTTP.ADO.{organization}")));
-            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-            adoClients[organization] = client;
-        }
+            if (!adoAccessTokens.TryGetValue(organization, out var token))
+                return null;
 
-        return client;
+            if (!adoClients.TryGetValue(organization, out var client))
+            {
+                client = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger($"HTTP.ADO.{organization}")));
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+                adoClients[organization] = client;
+            }
+
+            return client;
+        }
     }
 
     private string? GetAdoTokenForOrganization(string organization)
-        => adoAccessTokens.TryGetValue(organization, out var token) ? token : null;
+    {
+        lock (adoClientLock)
+        {
+            return adoAccessTokens.TryGetValue(organization, out var token) ? token : null;
+        }
+    }
+
+    private void ClearAdoClients()
+    {
+        List<HttpClient> clients;
+        lock (adoClientLock)
+        {
+            clients = adoClients.Values.ToList();
+            adoClients.Clear();
+        }
+
+        DisposeAdoClients(clients);
+    }
+
+    private static void DisposeAdoClients(IEnumerable<HttpClient> clients)
+    {
+        foreach (var client in clients)
+        {
+            client.Dispose();
+        }
+    }
 
     private void SetupGitHubClient()
     {
@@ -1246,5 +1282,7 @@ else
     {
         retryCiRefreshCts?.Cancel();
         retryCiRefreshCts?.Dispose();
+        ClearAdoClients();
+        adoClient.Dispose();
     }
 }
