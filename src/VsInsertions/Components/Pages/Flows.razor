@@ -208,7 +208,6 @@ else
     private string? gitHubUser;
     private string? gitHubPatToken;
     private string? gitHubPatInput;
-    private HttpClient adoClient = new();
     private readonly Lock adoClientLock = new();
     private readonly Dictionary<string, HttpClient> adoClients = new(StringComparer.OrdinalIgnoreCase);
     private HttpClient gitHubClient = new();
@@ -348,7 +347,6 @@ else
         }
 
         DisposeAdoClients(clientsToDispose);
-        SetupAdoClient();
 
         if (adoAccessToken != null)
         {
@@ -369,11 +367,6 @@ else
             config = null;
             ClearFlowPrState();
         }
-    }
-
-    private void SetupAdoClient()
-    {
-        adoClient = GetAdoClientForOrganization(PrimaryAdoOrganization) ?? new HttpClient();
     }
 
     private HttpClient? GetAdoClientForOrganization(string organization)
@@ -529,6 +522,13 @@ else
 
         try
         {
+            var adoClient = GetAdoClientForOrganization(PrimaryAdoOrganization);
+            if (adoClient is null)
+            {
+                subscriptionError = $"A {PrimaryAdoOrganization} Azure DevOps PAT is required to load subscriptions.";
+                return;
+            }
+
             config = await MaestroConfigService.GetConfigAsync(adoClient);
             repos = MaestroConfigService.GetUniqueRepos(config.Subscriptions);
             if (repos.Count > 0 && (currentRepo == null || !repos.Contains(currentRepo)))
@@ -1323,6 +1323,5 @@ else
         retryCiRefreshCts?.Cancel();
         retryCiRefreshCts?.Dispose();
         ClearAdoClients();
-        adoClient.Dispose();
     }
 }
