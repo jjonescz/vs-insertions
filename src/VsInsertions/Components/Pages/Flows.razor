@@ -210,6 +210,7 @@ else
     private string? gitHubPatInput;
     private readonly Lock adoClientLock = new();
     private readonly Dictionary<string, HttpClient> adoClients = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<HttpClient> retiredAdoClients = [];
     private HttpClient gitHubClient = new();
     private GitHubRateLimitHandler? rateLimitHandler;
     private bool rateLimitWaiting;
@@ -317,19 +318,14 @@ else
         var updatedTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
         string? previousPrimaryToken;
         bool tokensChanged;
-        List<HttpClient> clientsToDispose;
         lock (adoClientLock)
         {
             previousPrimaryToken = adoAccessTokens.TryGetValue(PrimaryAdoOrganization, out var token) ? token : null;
             tokensChanged = !AreAdoTokenSetsEqual(adoAccessTokens, updatedTokens);
-            if (!tokensChanged)
-            {
-                clientsToDispose = [];
-            }
-            else
+            if (tokensChanged)
             {
                 adoAccessTokens = updatedTokens;
-                clientsToDispose = adoClients.Values.ToList();
+                retiredAdoClients.AddRange(adoClients.Values);
                 adoClients.Clear();
             }
 
@@ -345,8 +341,6 @@ else
 
             return;
         }
-
-        DisposeAdoClients(clientsToDispose);
 
         if (adoAccessToken != null)
         {
@@ -400,8 +394,9 @@ else
         List<HttpClient> clients;
         lock (adoClientLock)
         {
-            clients = adoClients.Values.ToList();
+            clients = adoClients.Values.Concat(retiredAdoClients).ToList();
             adoClients.Clear();
+            retiredAdoClients.Clear();
         }
 
         DisposeAdoClients(clients);

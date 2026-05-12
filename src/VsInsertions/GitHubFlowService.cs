@@ -838,7 +838,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                             continue;
                         }
 
-                        var retryUrl = $"https://dev.azure.com/{org}/{project}/_apis/build/builds/{buildId}?retry=true&api-version=7.1";
+                        var retryUrl = $"https://dev.azure.com/{Uri.EscapeDataString(org)}/{Uri.EscapeDataString(project)}/_apis/build/builds/{Uri.EscapeDataString(buildId)}?retry=true&api-version=7.1";
                         using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
                         using var response = await adoClient.PatchAsync(retryUrl, content);
                         if (response.IsSuccessStatusCode)
