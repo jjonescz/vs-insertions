@@ -830,7 +830,10 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                     if (buildInfo is not null && !retriedAdoBuildIds.Contains(buildInfo.Value.BuildId))
                     {
                         var (org, project, buildId) = buildInfo.Value;
-                        var adoClient = getAdoClient?.Invoke(org);
+                        if (getAdoClient is null)
+                            continue;
+
+                        var adoClient = getAdoClient(org);
                         if (adoClient is null)
                         {
                             errors.Add($"{checkRun.Name}: Missing Azure DevOps PAT for {org}.");
@@ -985,6 +988,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
                 var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}/{Uri.EscapeDataString(project)}/_apis/build/builds/{Uri.EscapeDataString(buildId)}/Timeline?api-version=7.1";
                 var json = await adoClient.GetStringAsync(url);
                 var node = JsonNode.Parse(json);
+
                 var records = node?["records"]?.AsArray();
                 // The attempt number is tracked per job; use the max across all jobs.
                 var attempt = records?

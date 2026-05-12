@@ -96,7 +96,7 @@ else
     private string? organizationInput;
     private bool browserReady;
 
-    private bool UseMultipleTokens => AccessTokens is not null || AccessTokensChanged.HasDelegate;
+    private bool UseMultipleTokens => AccessTokensChanged.HasDelegate;
 
     private Dictionary<string, string> CurrentAccessTokens => AccessTokens is null
         ? new(StringComparer.OrdinalIgnoreCase)
