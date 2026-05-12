@@ -315,15 +315,36 @@ else
     // === ADO Auth ===
     private async Task HandleAdoTokensChanged(Dictionary<string, string> tokens)
     {
+        var updatedTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
         string? previousPrimaryToken;
+        bool tokensChanged;
         List<HttpClient> clientsToDispose;
         lock (adoClientLock)
         {
             previousPrimaryToken = adoAccessTokens.TryGetValue(PrimaryAdoOrganization, out var token) ? token : null;
-            adoAccessTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
+            tokensChanged = !AreAdoTokenSetsEqual(adoAccessTokens, updatedTokens);
+            if (!tokensChanged)
+            {
+                clientsToDispose = [];
+            }
+            else
+            {
+                adoAccessTokens = updatedTokens;
+                clientsToDispose = adoClients.Values.ToList();
+                adoClients.Clear();
+            }
+
             FlowsState.AdoAccessTokens = new Dictionary<string, string>(adoAccessTokens, StringComparer.OrdinalIgnoreCase);
-            clientsToDispose = adoClients.Values.ToList();
-            adoClients.Clear();
+        }
+
+        if (!tokensChanged)
+        {
+            if (config is null && !loadingSubscriptions && adoAccessToken is not null)
+            {
+                await LoadSubscriptionsAsync();
+            }
+
+            return;
         }
 
         DisposeAdoClients(clientsToDispose);
@@ -399,6 +420,25 @@ else
         {
             client.Dispose();
         }
+    }
+
+    private static bool AreAdoTokenSetsEqual(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        foreach (var (organization, token) in left)
+        {
+            if (!right.TryGetValue(organization, out var otherToken)
+                || !string.Equals(token, otherToken, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void SetupGitHubClient()
