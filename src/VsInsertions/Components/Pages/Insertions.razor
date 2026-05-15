@@ -268,9 +268,13 @@ else
 
 @code {
     private static readonly int numberOfRecentRpsToLoad = 10;
+    private const string vsRepositoryId = "a290117c-5a8a-40f7-bc2c-f14dbe3acf6d";
 
-    // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
-    private static readonly string listUrl = "https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/a290117c-5a8a-40f7-bc2c-f14dbe3acf6d/pullrequests?searchCriteria.creatorId=122d5278-3e55-4868-9d40-1e28c2515fc4&api-version=6.0";
+    private static readonly string[] insertionCreatorIds =
+    [
+        "122d5278-3e55-4868-9d40-1e28c2515fc4",
+        "ab734427-f175-6827-b257-5bd7b61f13a6",
+    ];
 
     private string? accessToken;
     private HttpClient client = new HttpClient();
@@ -286,6 +290,7 @@ else
     private string currentRepo = "Roslyn";
     private string currentTargetBranch = "refs/heads/main";
     private VsInsertion[]? insertions;
+    private readonly Dictionary<string, int> loadedInsertionCountsByCreatorId = new();
     /// <summary>Map from VS Insertion PR ID to the corresponding <see cref="RpsSummary"/>.</summary>
     /// <remarks>Kept separately from the list of insertions so RPS data survive reloads of insertions.</remarks>
     private readonly Dictionary<string, RpsSummary> rpsSummaries = new();
@@ -311,6 +316,7 @@ else
 
         started = true;
         insertions = null;
+        loadedInsertionCountsByCreatorId.Clear();
         errorHtml = null;
         StateHasChanged();
 
@@ -326,37 +332,44 @@ else
         StateHasChanged();
         try
         {
-            var skip = insertions?.Length ?? 0;
-            var url = listUrl + "&searchCriteria.status=" + statusFilter.ToString().ToLowerInvariant() + "&$top=100&$skip=" + skip;
-            Console.WriteLine(url);
-            var response = await client.GetAsync(url);
-            Console.WriteLine("Loaded");
+            var moreInsertions = new List<VsInsertion>();
+            foreach (var creatorId in insertionCreatorIds)
+            {
+                var skip = loadedInsertionCountsByCreatorId.GetValueOrDefault(creatorId);
+                var url = GetInsertionsListUrl(creatorId, skip);
+                Console.WriteLine(url);
+                var response = await client.GetAsync(url);
+                Console.WriteLine("Loaded");
 
-            string? responseText = null;
-            JsonNode? node;
-            try
-            {
-                responseText = await response.Content.ReadAsStringAsync();
-                response.EnsureSuccessStatusCode();
-                node = JsonNode.Parse(responseText);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                errorHtml = responseText ?? ex.ToString();
-                return;
+                string? responseText = null;
+                JsonNode? node;
+                try
+                {
+                    responseText = await response.Content.ReadAsStringAsync();
+                    response.EnsureSuccessStatusCode();
+                    node = JsonNode.Parse(responseText);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                    errorHtml = responseText ?? ex.ToString();
+                    return;
+                }
+
+                var creatorInsertions = node!["value"]!.AsArray().Select(x => new VsInsertion(this, x!)).ToArray();
+                moreInsertions.AddRange(creatorInsertions);
+                loadedInsertionCountsByCreatorId[creatorId] = skip + creatorInsertions.Length;
             }
 
             errorHtml = null;
-            var moreInsertions = node!["value"]!.AsArray().Select(x => new VsInsertion(this, x!));
 
             if (insertions == null)
             {
-                insertions = moreInsertions.ToArray();
+                insertions = moreInsertions.DistinctBy(x => x.PullRequestId).ToArray();
             }
             else
             {
-                insertions = insertions.Concat(moreInsertions).ToArray();
+                insertions = insertions.Concat(moreInsertions).DistinctBy(x => x.PullRequestId).ToArray();
             }
         }
         finally
@@ -366,6 +379,12 @@ else
         }
 
         AutoLoadRps();
+    }
+
+    private string GetInsertionsListUrl(string creatorId, int skip)
+    {
+        // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
+        return $"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/{vsRepositoryId}/pullrequests?searchCriteria.creatorId={creatorId}&api-version=6.0&searchCriteria.status={statusFilter.ToString().ToLowerInvariant()}&$top=100&$skip={skip}";
     }
 
     private static (int, int, int, string) GetInsertionSortKey(VsInsertion insertion)
