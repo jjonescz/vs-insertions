@@ -6,8 +6,14 @@ VS insertions dashboard for use by Roslyn and Razor teams.
 
 Run the tool (no install needed):
 
-```
+```sh
 dnx vs-insertions
+```
+
+You may need to specify the feed if you don't have nuget.org among your feeds:
+
+```sh
+dnx vs-insertions --source https://api.nuget.org/v3/index.json
 ```
 
 It starts a local web server on <http://localhost:47213> and opens the dashboard in your browser.
