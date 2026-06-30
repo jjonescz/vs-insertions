@@ -48,7 +48,7 @@ else
                 var outCount = group.Count(r => !r.IsIncoming);
                 var circularCount = group.Count(r => IsCircular(r));
                 var prCount = group.Sum(r => r.Prs.Count);
-                var disabledCount = group.Count(r => r.Subscription?.Enabled == false);
+                var disabledCount = group.Count(r => r.Subscription is { IsActive: false });
                 var dirSymbol = circularCount == group.Count() ? "⇄" : (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
                 var groupCollapseKey = CurrentRepo + "::" + group.Key;
                 var isGroupCollapsed = CollapsedGroups.Contains(groupCollapseKey);
@@ -79,8 +79,13 @@ else
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
-                    var isEnabled = row.Subscription?.Enabled ?? true;
-                    var enabledSuffix = isEnabled ? "" : " (disabled)";
+                    var isEnabled = row.Subscription?.IsActive ?? true;
+                    var enabledSuffix = row.Subscription switch
+                    {
+                        { Enabled: false } => " (disabled)",
+                        { IsFrequencyNone: true } => " (frequency: none — effectively disabled)",
+                        _ => "",
+                    };
                     var stuck = IsStuck(row, out var overdueTime, out var stuckMessage);
 
                     <tr>
@@ -100,7 +105,7 @@ else
                             }
                             @if (stuck)
                             {
-                                <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) @(row.Subscription?.UpdateFrequency is { } freq ? $"(frequency: {freq})" : "")">⚠️</span>
+                                <span class="ms-1" title="@stuckMessage — @FormatOverdue(overdueTime) @(row.Subscription is { } sub ? $"(frequency: {sub.UpdateFrequencyDisplay})" : "")">⚠️</span>
                             }
                             @if (row.SourceUpToDate == true && !row.Prs.Any(p => p.State == "open"))
                             {
@@ -109,7 +114,7 @@ else
                         </td>
 
                         @* Channel *@
-                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@ChannelTooltip(primaryPr, row)">
+                        <td style="cursor: pointer;" @onclick="() => ToggleRow(row)" title="@ChannelTooltip(row)">
                             @(row.Subscription?.Channel ?? "—")
                         </td>
 
@@ -600,11 +605,10 @@ else
         }
     }
 
-    private static string ChannelTooltip(FlowPr? pr, UnifiedFlowRow row)
+    private static string ChannelTooltip(UnifiedFlowRow row)
     {
-        var parts = new List<string>();
-        if (pr != null) parts.Add("Click to expand/collapse details");
-        if (row.Subscription?.UpdateFrequency != null) parts.Add($"Frequency: {row.Subscription.UpdateFrequency}");
+        var parts = new List<string> { "Click to expand/collapse details" };
+        if (row.Subscription is { } sub) parts.Add($"Frequency: {sub.UpdateFrequencyDisplay}");
         return string.Join("\n", parts);
     }
 

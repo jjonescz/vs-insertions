@@ -182,6 +182,24 @@ public sealed class ArcadeSubscription
     [YamlIgnore]
     public string TargetRepoShort => string.IsNullOrEmpty(TargetRepository) ? "<unknown>" : MaestroConfigService.NormalizeRepoName(TargetRepository);
 
+    /// <summary>
+    /// True if the update frequency is "none", meaning maestro never opens update PRs automatically.
+    /// darc omits the "Update Frequency" field entirely for none-frequency subscriptions, so an
+    /// absent (null/empty) value is also treated as "none".
+    /// </summary>
+    [YamlIgnore]
+    public bool IsFrequencyNone =>
+        string.IsNullOrWhiteSpace(UpdateFrequency)
+        || string.Equals(UpdateFrequency.Trim(), "None", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Update frequency for display, falling back to "none" when the field is absent.</summary>
+    [YamlIgnore]
+    public string UpdateFrequencyDisplay => string.IsNullOrWhiteSpace(UpdateFrequency) ? "none" : UpdateFrequency.Trim();
+
+    /// <summary>True if maestro automatically flows updates for this subscription (enabled and frequency is not "none").</summary>
+    [YamlIgnore]
+    public bool IsActive => Enabled && !IsFrequencyNone;
+
     [YamlIgnore]
     public string MergePolicySummary => MergePolicies is { Count: > 0 }
         ? string.Join(", ", MergePolicies.Select(mp => mp.Name))
