@@ -1,17 +1,15 @@
 @page "/flows"
-@using Microsoft.AspNetCore.Authentication
-@using Microsoft.AspNetCore.DataProtection
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
-@inject IHttpContextAccessor ContextAccessor
 @inject MaestroConfigService MaestroConfigService
 @inject GitHubFlowService GitHubFlowService
+@inject AdoTokenProvider AdoTokenProvider
+@inject GitHubTokenProvider GitHubTokenProvider
 @inject ILogger<Flows> Logger
 @inject ILoggerFactory LoggerFactory
 @inject FlowsState FlowsState
-@inject IDataProtectionProvider DataProtectionProvider
 @implements IDisposable
 
 <PageTitle>Flows</PageTitle>
@@ -40,32 +38,11 @@
 
 @* === Auth & Load controls === *@
 @{
-    var fullyLoggedIn = !string.IsNullOrEmpty(adoAccessToken) && browser
-        && (!string.IsNullOrEmpty(gitHubToken) || !string.IsNullOrEmpty(gitHubPatToken));
-
-    RenderFragment adoLogin = @<AdoLogin Organization="@PrimaryAdoOrganization" CookieName="flows_ado_token"
-              AccessTokens="@adoAccessTokens" AccessTokensChanged="HandleAdoTokensChanged"
-              OrganizationOptions="AdoOrganizationOptions"
-              LoginLabel="Log In (ADO)" LogoutLabel="Log Out (ADO)" />;
-
-    RenderFragment gitHubStatus = @<text>
-        @if (string.IsNullOrEmpty(gitHubToken))
-        {
-            <span class="badge bg-success">GitHub: @(gitHubUser ?? "PAT")</span>
-            <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogOutAsync">Sign out (GitHub PAT)</button>
-        }
-        else
-        {
-            <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in")</span>
-            <a href="/signout-github" data-enhance-nav="false" class="btn btn-outline-dark btn-sm">Sign out (GitHub)</a>
-        }
-    </text>;
-
     RenderFragment subscriptionButtons = @<text>
-        <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@loadingSubscriptions">
+        <button class="btn btn-primary" @onclick="LoadSubscriptionsAsync" disabled="@(loadingSubscriptions || !adoReady)">
             @(loadingSubscriptions ? "Loading..." : "Load Subscriptions")
         </button>
-        @if (config != null && !string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.Contains('/') == true)
+        @if (config != null && gitHubReady && currentRepo?.Contains('/') == true)
         {
             <button class="btn btn-outline-secondary" @onclick="LoadAllFlowPrsAsync" disabled="@(loadingPrs || loadingOutgoingPrs)">
                 @(loadingPrs || loadingOutgoingPrs ? "Loading PRs..." : "Refresh PRs")
@@ -78,71 +55,51 @@
     </text>;
 }
 
-@if (fullyLoggedIn)
+@if (browser)
 {
-    @* Compact single-line layout when fully authenticated. *@
     <div class="my-2 d-flex flex-wrap align-items-center gap-2">
-        @adoLogin
-        @gitHubStatus
+        @if (adoReady)
+        {
+            <span class="badge bg-success">Azure DevOps: signed in (az)</span>
+        }
+        else
+        {
+            <span class="badge bg-danger" title="@adoError">Azure DevOps: not signed in</span>
+        }
+
+        @if (gitHubReady)
+        {
+            <span class="badge bg-success">GitHub: @(gitHubUser ?? "signed in (gh)")</span>
+        }
+        else
+        {
+            <span class="badge bg-danger" title="@gitHubError">GitHub: not signed in</span>
+        }
+
+        <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshAuthAsync"
+                title="Re-check Azure CLI / GitHub CLI authentication">Re-check auth</button>
+
         @subscriptionButtons
     </div>
-}
-else
-{
-    @* Multi-row layout: show login controls for missing credentials. *@
-    <div class="my-2">
-        @adoLogin
-    </div>
 
-    @if (browser)
+    @if (!adoReady || !gitHubReady)
     {
-        <div class="my-2 d-flex flex-wrap align-items-center gap-2">
-            @if (string.IsNullOrEmpty(gitHubToken) && string.IsNullOrEmpty(gitHubPatToken))
+        <details class="my-2">
+            <summary>Not signed in?</summary>
+            <p>This tool uses your local Azure CLI and GitHub CLI credentials.</p>
+            <ul>
+                <li>Azure DevOps: run <CopyableCode Code="az login" /> (requires the <a href="https://learn.microsoft.com/cli/azure/install-azure-cli" target="_blank" rel="noopener noreferrer">Azure CLI</a>).</li>
+                <li>GitHub: run <CopyableCode Code="gh auth login" /> (requires the <a href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">GitHub CLI</a>).</li>
+            </ul>
+            @if (adoError != null)
             {
-                <a href="/signin-github-start?returnUrl=/flows" class="btn btn-dark">
-                    Sign in with GitHub
-                </a>
-
-                <div class="d-flex align-items-center gap-2">
-                    <input type="password" class="form-control form-control-sm" style="width: 260px;"
-                           placeholder="GitHub PAT (fallback)" @bind="gitHubPatInput" />
-                    <button class="btn btn-outline-dark btn-sm" @onclick="GitHubPatLogInAsync"
-                            disabled="@string.IsNullOrEmpty(gitHubPatInput)">Use PAT</button>
-                </div>
+                <div class="text-danger small">@adoError</div>
             }
-            else
+            @if (gitHubError != null)
             {
-                @gitHubStatus
+                <div class="text-danger small">@gitHubError</div>
             }
-        </div>
-
-        @if (string.IsNullOrEmpty(gitHubToken) && string.IsNullOrEmpty(gitHubPatToken))
-        {
-            <details class="my-2">
-                <summary>How do I get a GitHub PAT?</summary>
-                <p>
-                    Use the <a href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">GitHub CLI</a>:
-                </p>
-                <ol>
-                    <li>
-                        <CopyableCode Code="gh auth token" />
-                    </li>
-                </ol>
-                <p>
-                    Alternatively, go to
-                    <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener noreferrer">GitHub &gt; Settings &gt; Personal access tokens</a>
-                    and create a fine-grained token with <code>Pull requests (Read and write)</code> permission
-                    for the repositories you need.
-                </p>
-            </details>
-        }
-    }
-
-    @if (!string.IsNullOrEmpty(adoAccessToken))
-    {
-        <div class="my-2 d-flex flex-wrap align-items-center gap-2">
-            @subscriptionButtons
-        </div>
+        </details>
     }
 }
 
@@ -172,7 +129,7 @@ else
 
     @* === Unified flows === *@
     <UnifiedFlowTable Rows="unifiedRows"
-                      PrsAvailable="@(!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.Contains('/') == true)"
+                      PrsAvailable="@(gitHubReady && currentRepo?.Contains('/') == true)"
                       PrError="@prError"
                       OutgoingPrError="@outgoingPrError"
                       ExpandedRows="expandedRows"
@@ -198,26 +155,18 @@ else
     private HashSet<string> collapsedGroups = new(StringComparer.OrdinalIgnoreCase);
     private List<string> recentRepos = [];
     private const int MaxRecentRepos = 5;
-    private const string PrimaryAdoOrganization = "dnceng";
-    private static readonly string[] AdoOrganizationOptions = [PrimaryAdoOrganization, "devdiv", "dnceng-public"];
     private const string FavoriteReposCookieName = "flows_favorite_repos";
     private const string RecentReposCookieName = "flows_recent_repos";
     private const string CollapsedGroupsCookieName = "flows_collapsed_groups";
-    private Dictionary<string, string> adoAccessTokens = new(StringComparer.OrdinalIgnoreCase);
-    private string? gitHubToken;
+    private bool adoReady;
+    private string? adoError;
+    private bool gitHubReady;
+    private string? gitHubError;
     private string? gitHubUser;
-    private string? gitHubPatToken;
-    private string? gitHubPatInput;
-    private readonly Lock adoClientLock = new();
-    private readonly Dictionary<string, HttpClient> adoClients = new(StringComparer.OrdinalIgnoreCase);
+    private HttpClient? adoClient;
     private HttpClient gitHubClient = new();
     private GitHubRateLimitHandler? rateLimitHandler;
     private bool rateLimitWaiting;
-
-    private string? adoAccessToken => GetAdoTokenForOrganization(PrimaryAdoOrganization);
-
-    /// <summary>Effective GitHub token: OAuth takes priority, PAT is fallback.</summary>
-    private string? effectiveGitHubToken => gitHubToken ?? gitHubPatToken;
 
     // Subscriptions state (preserved across navigations via FlowsState).
     private MaestroConfig? config { get => FlowsState.Config; set => FlowsState.Config = value; }
@@ -269,11 +218,6 @@ else
             .ToList();
 
     // === Lifecycle ===
-    protected override void OnInitialized()
-    {
-        adoAccessTokens = new Dictionary<string, string>(FlowsState.AdoAccessTokens, StringComparer.OrdinalIgnoreCase);
-    }
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (scrollToAlert)
@@ -284,28 +228,7 @@ else
 
         if (firstRender)
         {
-            // Read GitHub token from OAuth cookie.
-            var httpContext = ContextAccessor.HttpContext;
-            if (httpContext?.User?.Identity?.IsAuthenticated == true)
-            {
-                gitHubToken = await httpContext.GetTokenAsync("access_token");
-                gitHubUser = httpContext.User.Identity.Name;
-            }
-
-            // Read GitHub PAT from cookie as fallback.
-            if (string.IsNullOrEmpty(gitHubToken))
-            {
-                await ReadGitHubPatCookieAsync();
-            }
-
-            if (!string.IsNullOrEmpty(effectiveGitHubToken))
-            {
-                SetupGitHubClient();
-                if (string.IsNullOrEmpty(gitHubUser))
-                {
-                    await FetchGitHubUserAsync();
-                }
-            }
+            await InitializeAuthAsync();
 
             await ReadFavoriteReposAsync();
             await ReadRecentReposAsync();
@@ -313,131 +236,72 @@ else
 
             browser = true;
             StateHasChanged();
-        }
-    }
 
-    // === ADO Auth ===
-    private async Task HandleAdoTokensChanged(Dictionary<string, string> tokens)
-    {
-        var updatedTokens = new Dictionary<string, string>(tokens, StringComparer.OrdinalIgnoreCase);
-        string? previousPrimaryToken;
-        bool tokensChanged;
-        List<HttpClient> clientsToDispose;
-        lock (adoClientLock)
-        {
-            previousPrimaryToken = adoAccessTokens.TryGetValue(PrimaryAdoOrganization, out var token) ? token : null;
-            tokensChanged = !AreAdoTokenSetsEqual(adoAccessTokens, updatedTokens);
-            if (!tokensChanged)
-            {
-                clientsToDispose = [];
-            }
-            else
-            {
-                adoAccessTokens = updatedTokens;
-                clientsToDispose = adoClients.Values.ToList();
-                adoClients.Clear();
-            }
-
-            FlowsState.AdoAccessTokens = new Dictionary<string, string>(adoAccessTokens, StringComparer.OrdinalIgnoreCase);
-        }
-
-        if (!tokensChanged)
-        {
-            if (config is null && !loadingSubscriptions && adoAccessToken is not null)
-            {
-                await LoadSubscriptionsAsync();
-            }
-
-            return;
-        }
-
-        DisposeAdoClients(clientsToDispose);
-
-        if (adoAccessToken != null)
-        {
-            subscriptionError = null;
-            if (!string.Equals(previousPrimaryToken, adoAccessToken, StringComparison.Ordinal))
-            {
-                config = null;
-                ClearFlowPrState();
-            }
-
-            if (config == null)
+            if (adoReady && config is null)
             {
                 await LoadSubscriptionsAsync();
             }
         }
-        else
-        {
-            config = null;
-            ClearFlowPrState();
-        }
     }
 
-    private HttpClient? GetAdoClientForOrganization(string organization)
+    // === CLI Auth ===
+    private async Task InitializeAuthAsync()
     {
-        lock (adoClientLock)
+        // Azure DevOps via the Azure CLI (az).
+        adoError = null;
+        try
         {
-            if (!adoAccessTokens.TryGetValue(organization, out var token))
-                return null;
+            await AdoTokenProvider.GetTokenAsync();
+            adoClient = new HttpClient(
+                new AdoAuthHandler(AdoTokenProvider, new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.ADO"))));
+            adoReady = true;
+        }
+        catch (Exception ex)
+        {
+            adoReady = false;
+            adoError = $"Azure DevOps sign-in failed. Run 'az login'. ({ex.Message})";
+            Logger.LogWarning(ex, "Failed to acquire Azure DevOps token via Azure CLI");
+        }
 
-            if (!adoClients.TryGetValue(organization, out var client))
-            {
-                client = new HttpClient(new LoggingHttpHandler(LoggerFactory.CreateLogger($"HTTP.ADO.{organization}")));
-                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                adoClients[organization] = client;
-            }
-
-            return client;
+        // GitHub via the GitHub CLI (gh).
+        gitHubError = null;
+        try
+        {
+            await GitHubTokenProvider.GetTokenAsync();
+            SetupGitHubClient();
+            gitHubReady = true;
+            await FetchGitHubUserAsync();
+        }
+        catch (Exception ex)
+        {
+            gitHubReady = false;
+            gitHubError = $"GitHub sign-in failed. Run 'gh auth login'. ({ex.Message})";
+            Logger.LogWarning(ex, "Failed to acquire GitHub token via GitHub CLI");
         }
     }
 
-    private string? GetAdoTokenForOrganization(string organization)
+    private async Task RefreshAuthAsync()
     {
-        lock (adoClientLock)
+        GitHubTokenProvider.Invalidate();
+        adoClient?.Dispose();
+        adoClient = null;
+        adoReady = false;
+        gitHubReady = false;
+        gitHubUser = null;
+        await InitializeAuthAsync();
+        StateHasChanged();
+
+        if (adoReady && config is null)
         {
-            return adoAccessTokens.TryGetValue(organization, out var token) ? token : null;
+            await LoadSubscriptionsAsync();
+        }
+        else if (gitHubReady)
+        {
+            await AutoLoadFlowPrsAsync();
         }
     }
 
-    private void ClearAdoClients()
-    {
-        List<HttpClient> clients;
-        lock (adoClientLock)
-        {
-            clients = adoClients.Values.ToList();
-            adoClients.Clear();
-        }
-
-        DisposeAdoClients(clients);
-    }
-
-    private static void DisposeAdoClients(IEnumerable<HttpClient> clients)
-    {
-        foreach (var client in clients)
-        {
-            client.Dispose();
-        }
-    }
-
-    private static bool AreAdoTokenSetsEqual(
-        IReadOnlyDictionary<string, string> left,
-        IReadOnlyDictionary<string, string> right)
-    {
-        if (left.Count != right.Count)
-            return false;
-
-        foreach (var (organization, token) in left)
-        {
-            if (!right.TryGetValue(organization, out var otherToken)
-                || !string.Equals(token, otherToken, StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private HttpClient? GetAdoClientForOrganization(string organization) => adoClient;
 
     private void SetupGitHubClient()
     {
@@ -450,8 +314,8 @@ else
             rateLimitWaiting = waiting;
             InvokeAsync(StateHasChanged);
         };
-        gitHubClient = new HttpClient(rateLimitHandler);
-        gitHubClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {effectiveGitHubToken}");
+        var authHandler = new GitHubAuthHandler(GitHubTokenProvider) { InnerHandler = rateLimitHandler };
+        gitHubClient = new HttpClient(authHandler);
         gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
         gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
     }
@@ -471,53 +335,6 @@ else
         }
     }
 
-    // === GitHub PAT ===
-    private const string GitHubPatCookieName = "flows_github_pat";
-
-    private async Task ReadGitHubPatCookieAsync()
-    {
-        var encrypted = await JSRuntime.InvokeAsync<string>("getCookie", GitHubPatCookieName);
-        try
-        {
-            var token = string.IsNullOrEmpty(encrypted) ? null :
-                DataProtectionProvider.CreateProtector(GitHubPatCookieName).Unprotect(encrypted);
-            if (!string.IsNullOrEmpty(token))
-            {
-                gitHubPatToken = token;
-                FlowsState.GitHubPatToken = token;
-            }
-        }
-        catch
-        {
-            // Cookie corrupt or key rotated — ignore.
-        }
-    }
-
-    private async Task GitHubPatLogInAsync()
-    {
-        if (string.IsNullOrEmpty(gitHubPatInput))
-            return;
-
-        var token = gitHubPatInput;
-        var encrypted = DataProtectionProvider.CreateProtector(GitHubPatCookieName).Protect(token);
-        await JSRuntime.InvokeVoidAsync("setCookie", GitHubPatCookieName, encrypted);
-        gitHubPatInput = null;
-        gitHubPatToken = token;
-        FlowsState.GitHubPatToken = token;
-        SetupGitHubClient();
-        await FetchGitHubUserAsync();
-
-        await AutoLoadFlowPrsAsync();
-    }
-
-    private async Task GitHubPatLogOutAsync()
-    {
-        await JSRuntime.InvokeVoidAsync("setCookie", GitHubPatCookieName, "");
-        gitHubPatToken = null;
-        FlowsState.GitHubPatToken = null;
-        ClearFlowPrState();
-    }
-
     // === Load Subscriptions ===
     private async Task LoadSubscriptionsAsync()
     {
@@ -527,10 +344,9 @@ else
 
         try
         {
-            var adoClient = GetAdoClientForOrganization(PrimaryAdoOrganization);
-            if (adoClient is null)
+            if (!adoReady || adoClient is null)
             {
-                subscriptionError = $"A {PrimaryAdoOrganization} Azure DevOps PAT is required to load subscriptions.";
+                subscriptionError = "Azure DevOps sign-in is required. Run 'az login' and click 'Re-check auth'.";
                 return;
             }
 
@@ -566,7 +382,7 @@ else
 
     private async Task AutoLoadFlowPrsAsync()
     {
-        if (!string.IsNullOrEmpty(effectiveGitHubToken) && currentRepo?.Contains('/') == true)
+        if (gitHubReady && currentRepo?.Contains('/') == true)
         {
             // Skip loading if PRs are already cached for this repo.
             if (flowPrs != null)
@@ -1328,6 +1144,6 @@ else
     {
         retryCiRefreshCts?.Cancel();
         retryCiRefreshCts?.Dispose();
-        ClearAdoClients();
+        adoClient?.Dispose();
     }
 }

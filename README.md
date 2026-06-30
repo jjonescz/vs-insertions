@@ -4,10 +4,9 @@ VS insertions dashboard for use by Roslyn and Razor teams.
 
 ## Development
 
-Fill the following in `secrets.json` (get its path via `dotnet user-secrets --project src/VsInsertions list --verbose`):
-- GitHub OAuth (optional, users can use PAT to log in instead):
-  - `GitHub:ClientId`
-  - `GitHub:ClientSecret`
+Authentication uses your local CLI credentials, so make sure you are signed in:
+- Azure DevOps: install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and run `az login`.
+- GitHub: install the [GitHub CLI](https://cli.github.com/) and run `gh auth login`.
 
 Open in Visual Studio and start the app (<kbd>F5</kbd>)
 or in VSCode and run the build task (<kbd>Ctrl+Shift+B</kbd>).
