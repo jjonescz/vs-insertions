@@ -8,9 +8,11 @@
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
-@inject IHttpContextAccessor ContextAccessor
+@inject AdoTokenProvider AdoTokenProvider
+@inject ILoggerFactory LoggerFactory
 @inject TitleParser TitleParser
 @inject RpsParser RpsParser
+@implements IDisposable
 
 <PageTitle>Insertions</PageTitle>
 
@@ -19,48 +21,50 @@
 </SectionContent>
 
 <div class="my-2">
-    <AdoLogin Organization="devdiv" CookieName="access_token"
-              AccessToken="@accessToken" AccessTokenChanged="HandleTokenChanged" />
-
-    @if (!string.IsNullOrEmpty(accessToken))
+    @if (adoError != null)
     {
-        <select class="form-select d-inline-block w-auto me-1" @bind="statusFilter">
-            <option value="@StatusFilter.All">All</option>
-            <option value="@StatusFilter.Active">Only active</option>
-        </select>
+        <div class="alert alert-danger d-flex align-items-center gap-2">
+            <span>@adoError</span>
+            <button class="btn btn-sm btn-outline-danger" @onclick="StartAsync">Retry</button>
+        </div>
+    }
 
-        <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
+    <select class="form-select d-inline-block w-auto me-1" @bind="statusFilter">
+        <option value="@StatusFilter.All">All</option>
+        <option value="@StatusFilter.Active">Only active</option>
+    </select>
 
-        <button class="btn btn-outline-danger me-2" @onclick="ToggleEditMode"
-                title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
-            @if (!editMode)
+    <button class="btn btn-primary me-2" @onclick="StartAsync">Load</button>
+
+    <button class="btn btn-outline-danger me-2" @onclick="ToggleEditMode"
+            title="@(!editMode ? "Show Abandon buttons" : "Hide Abandon buttons")">
+        @if (!editMode)
+        {
+            @:Edit mode
+        }
+        else
+        {
+            @:Readonly mode
+        }
+    </button>
+
+    @if (editMode && selectedInsertionIds.Count > 0)
+    {
+        <button class="btn btn-danger me-2" @onclick="AbandonSelectedAsync" disabled="@abandoningSelected">
+            @if (abandoningSelected)
             {
-                @:Edit mode
+                @:Abandoning...
             }
             else
             {
-                @:Readonly mode
+                @:Abandon selected (@selectedInsertionIds.Count)
             }
         </button>
+    }
 
-        @if (editMode && selectedInsertionIds.Count > 0)
-        {
-            <button class="btn btn-danger me-2" @onclick="AbandonSelectedAsync" disabled="@abandoningSelected">
-                @if (abandoningSelected)
-                {
-                    @:Abandoning...
-                }
-                else
-                {
-                    @:Abandon selected (@selectedInsertionIds.Count)
-                }
-            </button>
-        }
-
-        @if (loading)
-        {
-            @: Loading...
-        }
+    @if (loading)
+    {
+        @: Loading...
     }
 </div>
 
@@ -276,8 +280,7 @@ else
         "ab734427-f175-6827-b257-5bd7b61f13a6",
     ];
 
-    private string? accessToken;
-    private HttpClient client = new HttpClient();
+    private HttpClient client = null!;
     private bool started;
     private bool loading;
     private bool editMode;
@@ -295,33 +298,49 @@ else
     /// <remarks>Kept separately from the list of insertions so RPS data survive reloads of insertions.</remarks>
     private readonly Dictionary<string, RpsSummary> rpsSummaries = new();
     private string? errorHtml;
+    private string? adoError;
 
-    private async Task HandleTokenChanged(string? token)
+    protected override void OnInitialized()
     {
-        accessToken = token;
-        if (token != null)
+        // Azure DevOps requests are authenticated with a token obtained from the Azure CLI.
+        client = new HttpClient(
+            new AdoAuthHandler(AdoTokenProvider, new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.ADO"))));
+    }
+
+    public void Dispose()
+    {
+        client?.Dispose();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
         {
-            errorHtml = null;
-            started = false;
             await StartAsync();
         }
     }
 
     private async Task StartAsync()
     {
-        if (string.IsNullOrEmpty(accessToken))
-        {
-            return;
-        }
-
         started = true;
         insertions = null;
         loadedInsertionCountsByCreatorId.Clear();
         errorHtml = null;
+        adoError = null;
         StateHasChanged();
 
-        client.DefaultRequestHeaders.Remove("Authorization");
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+        try
+        {
+            // Validate up front that an Azure DevOps token can be obtained via the Azure CLI.
+            await AdoTokenProvider.GetTokenAsync();
+        }
+        catch (Exception ex)
+        {
+            adoError = $"Failed to get an Azure DevOps token via the Azure CLI. Run 'az login' and retry. ({ex.Message})";
+            started = false;
+            StateHasChanged();
+            return;
+        }
 
         await LoadMoreAsync();
     }

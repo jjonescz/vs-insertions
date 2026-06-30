@@ -1,14 +1,41 @@
-using Microsoft.AspNetCore.Authentication;
+using System.Diagnostics;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using VsInsertions;
 using VsInsertions.Components;
 using VsInsertions.Controllers;
 
-var builder = WebApplication.CreateBuilder(args);
+// Default local HTTP endpoint. HTTP only (no HTTPS) to avoid certificate setup;
+// uses a distinctive port to avoid clashing with other local dev servers.
+const string defaultUrl = "http://localhost:47213";
+
+// Auto-launch the browser by default; allow opting out via flag or env var.
+var noBrowser = args.Contains("--no-browser", StringComparer.OrdinalIgnoreCase)
+    || string.Equals(Environment.GetEnvironmentVariable("VSINSERTIONS_NO_BROWSER"), "1", StringComparison.Ordinal);
+var appArgs = args.Where(a => !string.Equals(a, "--no-browser", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+// When run as an installed .NET tool the working directory is the user's shell location,
+// so anchor the content root (appsettings.json, static web assets) to the install directory.
+// When run from the project directory (dotnet run / watch) keep the default content root.
+var runningAsTool = !File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"));
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = appArgs,
+    ContentRootPath = runningAsTool ? AppContext.BaseDirectory : null,
+});
 
 builder.Logging.AddSimpleConsole(options =>
 {
     options.TimestampFormat = "HH:mm:ss.fff ";
 });
+
+// Bind to the fixed HTTP endpoint unless the user overrides it (--urls / ASPNETCORE_URLS).
+if (string.IsNullOrEmpty(builder.Configuration["urls"])
+    && string.IsNullOrEmpty(builder.Configuration["ASPNETCORE_URLS"]))
+{
+    builder.WebHost.UseUrls(defaultUrl);
+}
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -22,89 +49,16 @@ builder.Services.AddSingleton<TitleParser>();
 builder.Services.AddSingleton<RpsParser>();
 builder.Services.AddSingleton<MaestroConfigService>();
 builder.Services.AddSingleton<GitHubFlowService>();
+builder.Services.AddSingleton<AdoTokenProvider>();
+builder.Services.AddSingleton<GitHubTokenProvider>();
 builder.Services.AddScoped<FlowsState>();
-
-// GitHub OAuth (only when credentials are configured).
-var gitHubClientId = builder.Configuration["GitHub:ClientId"];
-var gitHubClientSecret = builder.Configuration["GitHub:ClientSecret"];
-var authBuilder = builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultScheme = "Cookies";
-        options.DefaultChallengeScheme = "GitHub";
-    })
-    .AddCookie("Cookies");
-
-if (!string.IsNullOrEmpty(gitHubClientId) && !string.IsNullOrEmpty(gitHubClientSecret))
-{
-    authBuilder.AddGitHub("GitHub", options =>
-    {
-        options.ClientId = gitHubClientId;
-        options.ClientSecret = gitHubClientSecret;
-        options.Scope.Add("public_repo");
-        options.SaveTokens = true;
-    });
-}
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
-}
-
-app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-// GitHub OAuth sign-in/sign-out endpoints.
-app.MapGet("/signin-github-start", (string? returnUrl) =>
-    Results.Challenge(
-        new AuthenticationProperties
-        {
-            RedirectUri = returnUrl ?? "/flows",
-        },
-        authenticationSchemes: ["GitHub"]));
-app.MapGet("/signout-github", async (HttpContext ctx) =>
-{
-    // Revoke the GitHub app grant so next sign-in shows the authorization page,
-    // allowing the user to choose a different GitHub account.
-    var token = await ctx.GetTokenAsync("access_token");
-    if (!string.IsNullOrEmpty(token))
-    {
-        if (!string.IsNullOrEmpty(gitHubClientId) && !string.IsNullOrEmpty(gitHubClientSecret))
-        {
-            try
-            {
-                using var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("VsInsertions");
-                var credentials = Convert.ToBase64String(
-                    System.Text.Encoding.UTF8.GetBytes($"{gitHubClientId}:{gitHubClientSecret}"));
-                httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
-                using var request = new HttpRequestMessage(HttpMethod.Delete,
-                    $"https://api.github.com/applications/{Uri.EscapeDataString(gitHubClientId)}/grant")
-                {
-                    Content = JsonContent.Create(new { access_token = token }),
-                };
-                using var response = await httpClient.SendAsync(request);
-            }
-            catch
-            {
-                // Best effort — sign out from the app even if grant revocation fails.
-            }
-        }
-    }
-
-    await ctx.SignOutAsync("Cookies");
-    ctx.Response.Redirect("/flows");
-});
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -113,4 +67,39 @@ app.UseCors();
 
 app.MapControllers();
 
+// Open the dashboard in the browser once the server is listening.
+// Skipped in Development where the launch profile already opens the browser.
+if (!noBrowser && !app.Environment.IsDevelopment())
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        var url = app.Services.GetRequiredService<IServer>().Features
+            .Get<IServerAddressesFeature>()?.Addresses.FirstOrDefault() ?? defaultUrl;
+        OpenBrowser(url);
+    });
+}
+
 app.Run();
+
+static void OpenBrowser(string url)
+{
+    try
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            Process.Start("open", url);
+        }
+        else
+        {
+            Process.Start("xdg-open", url);
+        }
+    }
+    catch
+    {
+        // Best effort — ignore if no browser is available.
+    }
+}

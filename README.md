@@ -2,12 +2,28 @@
 
 VS insertions dashboard for use by Roslyn and Razor teams.
 
-## Development
+## Usage
 
-Fill the following in `secrets.json` (get its path via `dotnet user-secrets --project src/VsInsertions list --verbose`):
-- GitHub OAuth (optional, users can use PAT to log in instead):
-  - `GitHub:ClientId`
-  - `GitHub:ClientSecret`
+Run the tool (no install needed):
+
+```sh
+dnx vs-insertions
+```
+
+You may need to specify the feed if you don't have nuget.org among your feeds:
+
+```sh
+dnx vs-insertions --source https://api.nuget.org/v3/index.json
+```
+
+It starts a local web server on <http://localhost:47213> and opens the dashboard in your browser.
+Pass `--no-browser` (or set `VSINSERTIONS_NO_BROWSER=1`) to skip launching the browser.
+
+Authentication uses your local CLI credentials, so make sure you are signed in:
+- Azure DevOps: install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and run `az login`.
+- GitHub: install the [GitHub CLI](https://cli.github.com/) and run `gh auth login`.
+
+## Development
 
 Open in Visual Studio and start the app (<kbd>F5</kbd>)
 or in VSCode and run the build task (<kbd>Ctrl+Shift+B</kbd>).
