@@ -12,6 +12,7 @@
 @inject ILoggerFactory LoggerFactory
 @inject TitleParser TitleParser
 @inject RpsParser RpsParser
+@implements IDisposable
 
 <PageTitle>Insertions</PageTitle>
 
@@ -304,6 +305,11 @@ else
         // Azure DevOps requests are authenticated with a token obtained from the Azure CLI.
         client = new HttpClient(
             new AdoAuthHandler(AdoTokenProvider, new LoggingHttpHandler(LoggerFactory.CreateLogger("HTTP.ADO"))));
+    }
+
+    public void Dispose()
+    {
+        client?.Dispose();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
