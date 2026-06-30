@@ -55,21 +55,41 @@ builder.Services.AddScoped<FlowsState>();
 
 var app = builder.Build();
 
+// On the hosted deployment, keep only the cache API live and serve a static notice for every
+// other route. The dashboard itself only works locally, where it can use the Azure CLI / GitHub
+// CLI for authentication; set the VSINSERTIONS_HOSTED app setting (e.g. to "1") to enable this.
+var hosted = !string.IsNullOrEmpty(app.Configuration["VSINSERTIONS_HOSTED"]);
+
 // Configure the HTTP request pipeline.
-
 app.UseStaticFiles();
-app.UseAntiforgery();
-
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
 app.UseCors();
 
-app.MapControllers();
+if (hosted)
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+        app.UseHsts();
+    }
+
+    app.UseHttpsRedirection();
+
+    app.MapControllers();
+    app.MapFallbackToFile("notice.html");
+}
+else
+{
+    app.UseAntiforgery();
+
+    app.MapRazorComponents<App>()
+        .AddInteractiveServerRenderMode();
+
+    app.MapControllers();
+}
 
 // Open the dashboard in the browser once the server is listening.
-// Skipped in Development where the launch profile already opens the browser.
-if (!noBrowser && !app.Environment.IsDevelopment())
+// Skipped when hosted, and in Development where the launch profile already opens the browser.
+if (!hosted && !noBrowser && !app.Environment.IsDevelopment())
 {
     app.Lifetime.ApplicationStarted.Register(() =>
     {
