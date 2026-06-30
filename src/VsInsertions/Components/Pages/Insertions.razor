@@ -8,7 +8,6 @@
 @inject IJSRuntime JSRuntime
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
-@inject IHttpContextAccessor ContextAccessor
 @inject AdoTokenProvider AdoTokenProvider
 @inject ILoggerFactory LoggerFactory
 @inject TitleParser TitleParser
@@ -280,7 +279,7 @@ else
         "ab734427-f175-6827-b257-5bd7b61f13a6",
     ];
 
-    private HttpClient client = new HttpClient();
+    private HttpClient client = null!;
     private bool started;
     private bool loading;
     private bool editMode;

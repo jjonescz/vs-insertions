@@ -164,7 +164,7 @@
     private string? gitHubError;
     private string? gitHubUser;
     private HttpClient? adoClient;
-    private HttpClient gitHubClient = new();
+    private HttpClient gitHubClient = null!;
     private GitHubRateLimitHandler? rateLimitHandler;
     private bool rateLimitWaiting;
 
@@ -315,6 +315,7 @@
             InvokeAsync(StateHasChanged);
         };
         var authHandler = new GitHubAuthHandler(GitHubTokenProvider) { InnerHandler = rateLimitHandler };
+        gitHubClient?.Dispose();
         gitHubClient = new HttpClient(authHandler);
         gitHubClient.DefaultRequestHeaders.Add("User-Agent", "VsInsertions");
         gitHubClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
@@ -1145,5 +1146,6 @@
         retryCiRefreshCts?.Cancel();
         retryCiRefreshCts?.Dispose();
         adoClient?.Dispose();
+        gitHubClient?.Dispose();
     }
 }
