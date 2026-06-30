@@ -5,8 +5,23 @@
     <Features>use-roslyn-tokenizer=true</Features>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <IsPackable>true</IsPackable>
+    <ToolCommandName>vs-insertions</ToolCommandName>
+    <PackageId>vs-insertions</PackageId>
+    <Authors>jjonescz</Authors>
+    <Description>VS insertions dashboard for the Roslyn and Razor teams. Runs a local web UI; authenticates via the Azure CLI and GitHub CLI.</Description>
+    <PackageTags>vs-insertions;azure-devops;roslyn;razor;dashboard</PackageTags>
+    <PackageProjectUrl>https://github.com/jjonescz/vs-insertions</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jjonescz/vs-insertions</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="VsInsertions.Tests" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
