@@ -10,6 +10,10 @@ Run the tool (no install needed):
 dnx vs-insertions
 ```
 
+> [!TIP]
+> Create a desktop or start menu shortcut for `dotnet.exe dnx vs-insertions`.
+> Set "Run: Minimized" in the shortcut's properties to hide the terminal (the page will open in a browser automatically on start).
+
 You may need to specify the feed if you don't have nuget.org among your feeds:
 
 ```sh
