@@ -9,16 +9,12 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     private static readonly string GitHubApiBase = "https://api.github.com";
     private const string GraphQLUrl = "https://api.github.com/graphql";
 
-    private static readonly HashSet<string> BotLogins = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> BotLoginsWithoutSuffix = new(StringComparer.OrdinalIgnoreCase)
     {
-        "dotnet-maestro[bot]",
         "dotnet-maestro",
-        "azure-pipelines[bot]",
         "azure-pipelines",
-        "github-actions[bot]",
-        "dependabot[bot]",
-        "msftbot[bot]",
         "dotnet-bot",
+        "dotnet-oneloc-localization",
     };
 
     /// <summary>
@@ -50,7 +46,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         }
 
         AddSearch("flowPrs", "q0", $"repo:{owner}/{repo} is:pr author:app/dotnet-maestro", nodeFields);
-        AddSearch("locPrs", "q1", $"repo:{owner}/{repo} is:pr author:dotnet-bot \"Localized file check-in\"", nodeFields);
+        AddSearch("locPrs", "q1", $"repo:{owner}/{repo} is:pr in:title \"Localized file check-in by OneLocBuild Task:\"", nodeFields);
         AddSearch("mergePrs", "q2", $"repo:{owner}/{repo} is:pr author:app/github-actions \"[automated] Merge branch\"", nodeFields);
 
         int varIdx = 3;
@@ -1008,7 +1004,9 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
     }
 
     private static bool IsBotLogin(string? login)
-        => login is null || BotLogins.Contains(login);
+        => login is null
+            || login.EndsWith("[bot]", StringComparison.OrdinalIgnoreCase)
+            || BotLoginsWithoutSuffix.Contains(login);
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength] + "…";

@@ -1,4 +1,5 @@
 ﻿@inject IJSRuntime JSRuntime
+@inject ILogger<CopyableCode> Logger
 
 <div class="d-flex flex-row align-items-start">
     <button class="btn btn-link py-0" title="Copy to clipboard" @onclick="CopyToClipboardAsync">
@@ -29,11 +30,19 @@
 
     private async Task CopyToClipboardAsync()
     {
-        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", Code);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", Code);
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Failed to copy code to the clipboard");
+            return;
+        }
+
         copied = true;
         StateHasChanged();
         await Task.Delay(TimeSpan.FromSeconds(3));
         copied = false;
-        StateHasChanged();
     }
 }

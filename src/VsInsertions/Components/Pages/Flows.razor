@@ -223,7 +223,14 @@
         if (scrollToAlert)
         {
             scrollToAlert = false;
-            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('action-alert')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+            }
+            catch (JSException ex)
+            {
+                Logger.LogWarning(ex, "Failed to scroll to the action alert");
+            }
         }
 
         if (firstRender)
@@ -341,7 +348,7 @@
     {
         loadingSubscriptions = true;
         subscriptionError = null;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -414,7 +421,7 @@
         prError = null;
         outgoingPrError = null;
         expandedRows.Clear();
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -554,7 +561,7 @@
         actionInProgressPr = pr;
         actionType = "approve";
         actionMessage = null;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -578,7 +585,6 @@
         {
             actionInProgressPr = null;
             actionType = null;
-            StateHasChanged();
         }
     }
 
@@ -591,7 +597,7 @@
         actionInProgressPr = pr;
         actionType = "merge";
         actionMessage = null;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -609,7 +615,6 @@
         {
             actionInProgressPr = null;
             actionType = null;
-            StateHasChanged();
         }
     }
 
@@ -624,7 +629,7 @@
         actionInProgressPr = pr;
         actionType = "retry";
         actionMessage = null;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -655,7 +660,6 @@
         {
             actionInProgressPr = null;
             actionType = null;
-            StateHasChanged();
         }
     }
 
@@ -731,7 +735,6 @@
             pr.ChangedFilesLoaded = false;
             pr.ChangedFiles = null;
         }
-        StateHasChanged();
         await GitHubFlowService.LoadPrDetailsBatchAsync(gitHubClient, row.Prs);
         StateHasChanged();
         await Task.WhenAll(
@@ -800,9 +803,34 @@
 
     // === Favorite / Recent repos ===
 
+    private async Task<string?> ReadCookieAsync(string cookieName, string settingName)
+    {
+        try
+        {
+            return await JSRuntime.InvokeAsync<string>("getCookie", cookieName);
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Failed to read {SettingName}", settingName);
+            return null;
+        }
+    }
+
+    private async Task SaveCookieAsync(string cookieName, string value, string settingName)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("setCookie", cookieName, value);
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Failed to save {SettingName}", settingName);
+        }
+    }
+
     private async Task ReadFavoriteReposAsync()
     {
-        var value = await JSRuntime.InvokeAsync<string>("getCookie", FavoriteReposCookieName);
+        var value = await ReadCookieAsync(FavoriteReposCookieName, "favorite repositories");
         if (!string.IsNullOrEmpty(value))
         {
             favoriteRepos = new HashSet<string>(
@@ -814,12 +842,12 @@
     private async Task SaveFavoriteReposAsync()
     {
         var value = string.Join(",", favoriteRepos);
-        await JSRuntime.InvokeVoidAsync("setCookie", FavoriteReposCookieName, value);
+        await SaveCookieAsync(FavoriteReposCookieName, value, "favorite repositories");
     }
 
     private async Task ReadRecentReposAsync()
     {
-        var value = await JSRuntime.InvokeAsync<string>("getCookie", RecentReposCookieName);
+        var value = await ReadCookieAsync(RecentReposCookieName, "recent repositories");
         if (!string.IsNullOrEmpty(value))
         {
             recentRepos = value.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -829,12 +857,12 @@
     private async Task SaveRecentReposAsync()
     {
         var value = string.Join(",", recentRepos);
-        await JSRuntime.InvokeVoidAsync("setCookie", RecentReposCookieName, value);
+        await SaveCookieAsync(RecentReposCookieName, value, "recent repositories");
     }
 
     private async Task ReadCollapsedGroupsAsync()
     {
-        var value = await JSRuntime.InvokeAsync<string>("getCookie", CollapsedGroupsCookieName);
+        var value = await ReadCookieAsync(CollapsedGroupsCookieName, "collapsed groups");
         if (!string.IsNullOrEmpty(value))
         {
             collapsedGroups = new HashSet<string>(
@@ -846,7 +874,7 @@
     private async Task SaveCollapsedGroupsAsync()
     {
         var value = string.Join(",", collapsedGroups);
-        await JSRuntime.InvokeVoidAsync("setCookie", CollapsedGroupsCookieName, value);
+        await SaveCookieAsync(CollapsedGroupsCookieName, value, "collapsed groups");
     }
 
     private bool IsFavorite(string? repo) =>
