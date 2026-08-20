@@ -348,6 +348,7 @@
     {
         loadingSubscriptions = true;
         subscriptionError = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -420,6 +421,7 @@
         prError = null;
         outgoingPrError = null;
         expandedRows.Clear();
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -559,6 +561,7 @@
         actionInProgressPr = pr;
         actionType = "approve";
         actionMessage = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -594,6 +597,7 @@
         actionInProgressPr = pr;
         actionType = "merge";
         actionMessage = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -625,6 +629,7 @@
         actionInProgressPr = pr;
         actionType = "retry";
         actionMessage = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {

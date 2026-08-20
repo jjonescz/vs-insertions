@@ -327,6 +327,7 @@ else
         loadedInsertionCountsByCreatorId.Clear();
         errorHtml = null;
         adoError = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -347,6 +348,7 @@ else
     private async Task LoadMoreAsync()
     {
         loading = true;
+        await InvokeAsync(StateHasChanged);
         try
         {
             var moreInsertions = new List<VsInsertion>();
@@ -392,6 +394,7 @@ else
         finally
         {
             loading = false;
+            await InvokeAsync(StateHasChanged);
         }
 
         AutoLoadRps();
@@ -509,6 +512,7 @@ else
         if (insertions == null) return;
 
         abandoningSelected = true;
+        await InvokeAsync(StateHasChanged);
         try
         {
             var toAbandon = insertions
