@@ -19,6 +19,8 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         "dependabot[bot]",
         "msftbot[bot]",
         "dotnet-bot",
+        "dotnet-oneloc-localization[bot]",
+        "dotnet-oneloc-localization",
     };
 
     /// <summary>
@@ -50,7 +52,7 @@ public sealed class GitHubFlowService(ILogger<GitHubFlowService> logger)
         }
 
         AddSearch("flowPrs", "q0", $"repo:{owner}/{repo} is:pr author:app/dotnet-maestro", nodeFields);
-        AddSearch("locPrs", "q1", $"repo:{owner}/{repo} is:pr author:dotnet-bot \"Localized file check-in\"", nodeFields);
+        AddSearch("locPrs", "q1", $"repo:{owner}/{repo} is:pr in:title \"Localized file check-in by OneLocBuild Task:\"", nodeFields);
         AddSearch("mergePrs", "q2", $"repo:{owner}/{repo} is:pr author:app/github-actions \"[automated] Merge branch\"", nodeFields);
 
         int varIdx = 3;
