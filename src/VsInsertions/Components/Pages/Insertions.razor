@@ -327,7 +327,6 @@ else
         loadedInsertionCountsByCreatorId.Clear();
         errorHtml = null;
         adoError = null;
-        StateHasChanged();
 
         try
         {
@@ -348,7 +347,6 @@ else
     private async Task LoadMoreAsync()
     {
         loading = true;
-        StateHasChanged();
         try
         {
             var moreInsertions = new List<VsInsertion>();
@@ -394,7 +392,6 @@ else
         finally
         {
             loading = false;
-            StateHasChanged();
         }
 
         AutoLoadRps();
@@ -512,7 +509,6 @@ else
         if (insertions == null) return;
 
         abandoningSelected = true;
-        StateHasChanged();
         try
         {
             var toAbandon = insertions
@@ -530,7 +526,6 @@ else
         finally
         {
             abandoningSelected = false;
-            StateHasChanged();
         }
     }
 
