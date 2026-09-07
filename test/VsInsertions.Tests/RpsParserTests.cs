@@ -1150,6 +1150,41 @@ public class RpsParserTests
     }
 
     [Fact]
+    public void FailedRequiredTests()
+    {
+        Verify(new()
+        {
+            Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/778420",
+            Checks = """
+            {
+              "configuration": {
+                "settings": {
+                  "displayName": "Required Tests",
+                  "validDuration": 4320
+                }
+              },
+              "status": "rejected",
+              "context": {
+                "buildStartedUtc": "2026-09-06T06:50:11.3438508Z",
+                "isExpired": false
+              }
+            }
+            """,
+        }, """
+            RequiredTestsStatus:
+              Status: Rejected
+              Expires: 2026-09-09T06:50:11.3438508+00:00
+            Display:
+              Short: Build: ?, RequiredTests: ✘, DDRIT: N/A, Speedometer: N/A
+              Long:
+                Build: Unknown
+                RequiredTests: Rejected (expires 2026-09-09T06:50:11.3438508+00:00)
+                DDRIT: Not started
+                Speedometer: Not started
+            """);
+    }
+
+    [Fact]
     public void FailedDesktopValidation()
     {
         Verify(new()

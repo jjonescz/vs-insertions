@@ -22,6 +22,7 @@ public sealed class RpsParser
 
         rpsSummary.BuildStatus = getBuildStatus(checksJson, "CloudBuild");
         rpsSummary.DesktopValidationStatus = getBuildStatus(checksJson, "Desktop Validation");
+        rpsSummary.RequiredTestsStatus = getBuildStatus(checksJson, "Required Tests");
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
         rpsSummary.SpeedometerScoped = getRunResults(threads, "We've started Speedometer-Scoped");
         rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer\r");
@@ -208,6 +209,7 @@ public sealed class RpsSummary
     public bool Loaded { get; set; }
     public BuildStatus? BuildStatus { get; set; }
     public BuildStatus? DesktopValidationStatus { get; set; }
+    public BuildStatus? RequiredTestsStatus { get; set; }
     public RpsRun? Ddrit { get; set; }
     public RpsRun? SpeedometerScoped { get; set; }
     public RpsRun? Speedometer { get; set; }
@@ -220,6 +222,7 @@ public sealed class RpsSummary
             {
                 ("Build", BuildStatus.Display()),
                 ("DesktopValidation", DesktopValidationStatus?.Display()),
+                ("RequiredTests", RequiredTestsStatus?.Display()),
                 ("DDRIT", Ddrit.Display()),
                 ("Speedometer-Scoped", SpeedometerScoped?.Display()),
                 ("Speedometer", Speedometer.Display()),
