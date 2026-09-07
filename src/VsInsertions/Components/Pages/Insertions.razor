@@ -167,6 +167,7 @@ else
                     <th scope="col">Edit</th>
                 }
                 <th scope="col">Build</th>
+                <th scope="col" title="Required Tests">Req</th>
                 <th scope="col">DDRIT</th>
                 <th scope="col" title="Speedometer-Scoped">Scoped</th>
                 <th scope="col" title="Speedometer">Speed</th>
@@ -227,11 +228,11 @@ else
 
                     @if (insertion.RpsSummary is null)
                     {
-                        <td colspan="4">RPS not loaded</td>
+                        <td colspan="5">RPS not loaded</td>
                     }
                     else if (!insertion.RpsSummary.Loaded)
                     {
-                        <td colspan="4">Loading RPS...</td>
+                        <td colspan="5">Loading RPS...</td>
                     }
                     else
                     {
@@ -241,6 +242,8 @@ else
                             <span title="Build: @build.Long">@build.Short</span>
                             <span title="DesktopValidation: @desktopValidation.Long">@desktopValidation.Short</span>
                         </td>
+                        var requiredTests = insertion.RpsSummary.RequiredTestsStatus.Display();
+                        <td title="Required Tests: @requiredTests.Long">@requiredTests.Short</td>
                         var ddrit = insertion.RpsSummary.Ddrit.Display();
                         <td title="DDRIT: @ddrit.Long">@ddrit.Short</td>
                         var speedometerScoped = insertion.RpsSummary.SpeedometerScoped.Display();
