@@ -29,6 +29,26 @@
                     <a href="@($"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{changes.PreviousInsertionId}")"
                        target="_blank" rel="noopener noreferrer">@changes.PreviousBuildNumber</a>
                     (VS PR @changes.PreviousInsertionId).
+                    Compare with@(" ")
+                    @if (changes.PreviousCompareUrl is { } previousCompareUrl)
+                    {
+                        <a href="@previousCompareUrl" target="_blank" rel="noopener noreferrer"
+                        title="Compare the previous insertion attempt's commit with this build">previous</a>
+                    }
+                    else
+                    {
+                        <span class="text-muted" title="The previous insertion or its GitHub commit information is unavailable">previous</span>
+                    }
+                    @(" · ")
+                    @if (changes.InsertedCompareUrl is { } insertedCompareUrl)
+                    {
+                        <a href="@insertedCompareUrl" target="_blank" rel="noopener noreferrer"
+                        title="Compare the already-inserted 'from' commit recorded in this description with this build">inserted</a>
+                    }
+                    else
+                    {
+                        <span class="text-muted" title="The description does not identify the inserted baseline and GitHub commit information">inserted</span>
+                    }
                 </p>
             }
             @if (changes.PullRequests.Count == 0)

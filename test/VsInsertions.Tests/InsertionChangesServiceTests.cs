@@ -15,6 +15,66 @@ public class InsertionChangesServiceTests
         - [Old title](https://github.com/DOTNET/ROSLYN/pull/1/files#diff)
         - [Removed from current description](https://github.com/dotnet/roslyn/pull/3)
         """;
+    private const string InsertedCommit = "d7b7579180d60dcff342863163485202f778fb34";
+    private const string PreviousCommit = "6de0973c513f7d3940cc0b52ff7cd7d55b869982";
+    private const string CurrentCommit = "38a51ec2d3a23600078f62be5b581464954c6e9f";
+
+    private static string Diff(string baseline, string head) =>
+        $"[View Complete Diff of Changes](https://dev.azure.com/org/project/_git/roslyn/branchCompare?baseVersion=GC{baseline}&targetVersion=GC{head})\n\n";
+
+    [Fact]
+    public async Task BuildsSeparatePreviousAndInsertedComparisonsFromFullDescriptions()
+    {
+        using var handler = new StubHandler(uri => uri.AbsolutePath.Split('/').Last() switch
+        {
+            "50" => Json(Details(50, Diff(InsertedCommit, CurrentCommit) + CurrentDescription)),
+            "40" => Json(Details(40, Diff(InsertedCommit, PreviousCommit) + CurrentDescription)),
+            _ => ListForCreator(uri, [Details(40, "truncated")]),
+        });
+        using var client = new HttpClient(handler);
+
+        var changes = await new InsertionChangesService(client, new TitleParser()).GetChangesAsync(50);
+
+        Assert.Equal($"https://github.com/dotnet/roslyn/compare/{PreviousCommit}...{CurrentCommit}", changes.PreviousCompareUrl);
+        Assert.Equal($"https://github.com/dotnet/roslyn/compare/{InsertedCommit}...{CurrentCommit}", changes.InsertedCompareUrl);
+        Assert.All(changes.PullRequests, change => Assert.False(change.IsNew));
+        Assert.Equal(4, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task InsertedComparisonDoesNotRequirePreviousAttempt()
+    {
+        using var handler = new StubHandler(uri => uri.AbsolutePath.EndsWith("/50")
+            ? Json(Details(50, Diff(InsertedCommit, CurrentCommit))) : ListForCreator(uri, []));
+        using var client = new HttpClient(handler);
+
+        var changes = await new InsertionChangesService(client, new TitleParser()).GetChangesAsync(50);
+
+        Assert.Null(changes.PreviousCompareUrl);
+        Assert.Equal($"https://github.com/dotnet/roslyn/compare/{InsertedCommit}...{CurrentCommit}", changes.InsertedCompareUrl);
+        Assert.Empty(changes.PullRequests);
+    }
+
+    [Fact]
+    public async Task PreviousComparisonDoesNotRequireInsertedBaseline()
+    {
+        var description = $"""
+            Updating Roslyn to [new](https://dev.azure.com/org/project/_build/results?buildId=2)
+            ([{CurrentCommit}](https://dev.azure.com/org/project/_apis/build/builds/2/sources))
+            """;
+        using var handler = new StubHandler(uri => uri.AbsolutePath.Split('/').Last() switch
+        {
+            "50" => Json(Details(50, description)),
+            "40" => Json(Details(40, Diff(InsertedCommit, PreviousCommit))),
+            _ => ListForCreator(uri, [Details(40)]),
+        });
+        using var client = new HttpClient(handler);
+
+        var changes = await new InsertionChangesService(client, new TitleParser()).GetChangesAsync(50);
+
+        Assert.Equal($"https://github.com/dotnet/roslyn/compare/{PreviousCommit}...{CurrentCommit}", changes.PreviousCompareUrl);
+        Assert.Null(changes.InsertedCompareUrl);
+    }
 
     [Fact]
     public async Task ComparesFullDescriptionsAndCachesSuccessfulResults()
@@ -35,6 +95,8 @@ public class InsertionChangesServiceTests
         Assert.Equal(40, changes.PreviousInsertionId);
         Assert.Equal("20260909.40", changes.PreviousBuildNumber);
         Assert.Null(changes.ComparisonUnavailableReason);
+        Assert.Null(changes.PreviousCompareUrl);
+        Assert.Null(changes.InsertedCompareUrl);
         Assert.Collection(changes.PullRequests,
             change =>
             {

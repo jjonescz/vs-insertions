@@ -10,7 +10,9 @@ public sealed record InsertionChanges(
     IReadOnlyList<InsertionChange> PullRequests,
     int? PreviousInsertionId,
     string? PreviousBuildNumber,
-    string? ComparisonUnavailableReason);
+    string? ComparisonUnavailableReason,
+    string? PreviousCompareUrl,
+    string? InsertedCompareUrl);
 
 public sealed class InsertionChangesService(HttpClient client, TitleParser titleParser)
 {
@@ -60,13 +62,20 @@ public sealed class InsertionChangesService(HttpClient client, TitleParser title
 
         var previousUrls = MergedPullRequestParser.Parse(previous?.Description)
             .Select(pr => pr.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var currentCommits = InsertionCommitParser.Parse(current.Description, current.Title?.Repository);
+        var previousCommits = InsertionCommitParser.Parse(previous?.Description, previous?.Title?.Repository);
+        var previousCompareUrl = currentCommits is not null && previousCommits is not null &&
+            currentCommits.GitHubRepository.Equals(previousCommits.GitHubRepository, StringComparison.OrdinalIgnoreCase)
+            ? currentCommits.CompareUrl(previousCommits.BuildCommit) : null;
         var changes = new InsertionChanges(
             MergedPullRequestParser.Parse(current.Description)
                 .Select(pr => new InsertionChange(pr, unavailableReason is null && !previousUrls.Contains(pr.Url)))
                 .ToArray(),
             previous?.Id,
             previous?.Title?.BuildNumber,
-            unavailableReason);
+            unavailableReason,
+            previousCompareUrl,
+            currentCommits?.InsertedCommit is { } insertedCommit ? currentCommits.CompareUrl(insertedCommit) : null);
         changesCache[pullRequestId] = changes;
         return changes;
     }
