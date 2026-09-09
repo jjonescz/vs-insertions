@@ -176,7 +176,7 @@ else
         <tbody>
             @foreach (var insertion in insertions.Where(ShouldDisplayInsertion).OrderByDescending(GetInsertionSortKey))
             {
-                <tr>
+                <tr @key="insertion">
                     @if (editMode)
                     {
                         <td>
@@ -207,7 +207,11 @@ else
 
                     <td title="Source branch (the branch of the GitHub repo that the insertion is created from)">@insertion.SourceBranch</td>
 
-                    <td><a href="@insertion.Url" title="@insertion.BuildNumberTooltip" target="_blank" rel="noopener noreferrer">@insertion.BuildNumber</a></td>
+                    <td>
+                        <InsertionBuildLink Url="@insertion.Url" BuildNumber="@insertion.BuildNumber"
+                                            Tooltip="@insertion.BuildNumberTooltip"
+                                            LoadChanges="@(() => changesService.GetChangesAsync(int.Parse(insertion.PullRequestId)))" />
+                    </td>
 
                     @if (editMode)
                     {
@@ -274,15 +278,8 @@ else
 
 @code {
     private static readonly int numberOfRecentRpsToLoad = 10;
-    private const string vsRepositoryId = "a290117c-5a8a-40f7-bc2c-f14dbe3acf6d";
-
-    private static readonly string[] insertionCreatorIds =
-    [
-        "122d5278-3e55-4868-9d40-1e28c2515fc4",
-        "ab734427-f175-6827-b257-5bd7b61f13a6",
-    ];
-
     private HttpClient client = null!;
+    private InsertionChangesService changesService = null!;
     private bool started;
     private bool loading;
     private bool editMode;
@@ -325,6 +322,7 @@ else
     private async Task StartAsync()
     {
         started = true;
+        changesService = new InsertionChangesService(client, TitleParser);
         insertions = null;
         loadedInsertionCountsByCreatorId.Clear();
         errorHtml = null;
@@ -354,7 +352,7 @@ else
         try
         {
             var moreInsertions = new List<VsInsertion>();
-            foreach (var creatorId in insertionCreatorIds)
+            foreach (var creatorId in InsertionChangesService.InsertionCreatorIds)
             {
                 var skip = loadedInsertionCountsByCreatorId.GetValueOrDefault(creatorId);
                 var url = GetInsertionsListUrl(creatorId, skip);
@@ -405,7 +403,7 @@ else
     private string GetInsertionsListUrl(string creatorId, int skip)
     {
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests?view=azure-devops-rest-6.0&tabs=HTTP
-        return $"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/{vsRepositoryId}/pullrequests?searchCriteria.creatorId={creatorId}&api-version=6.0&searchCriteria.status={statusFilter.ToString().ToLowerInvariant()}&$top=100&$skip={skip}";
+        return $"https://dev.azure.com/devdiv/devdiv/_apis/git/repositories/{InsertionChangesService.VsRepositoryId}/pullrequests?searchCriteria.creatorId={creatorId}&api-version=6.0&searchCriteria.status={statusFilter.ToString().ToLowerInvariant()}&$top=100&$skip={skip}";
     }
 
     private static (int, int, int, string) GetInsertionSortKey(VsInsertion insertion)

@@ -1,0 +1,106 @@
+@using System.Text.Json
+@inject ILogger<InsertionBuildLink> Logger
+
+<div class="insertion-build-link" @onmouseenter="ShowAsync" @onfocusin="ShowAsync">
+    <a href="@Url" aria-describedby="@previewId" target="_blank" rel="noopener noreferrer">@BuildNumber</a>
+    <div id="@previewId" class="insertion-preview" role="region" aria-label="Merged pull requests">
+        <div class="insertion-preview-metadata">@Tooltip</div>
+        <hr class="my-2" />
+        @if (error is not null)
+        {
+            <div class="text-danger" role="alert">@error</div>
+            <button class="btn btn-sm btn-outline-primary mt-2" @onclick="LoadAsync">Retry</button>
+        }
+        else if (changes is null)
+        {
+            <div role="status">Loading merged PRs...</div>
+        }
+        else
+        {
+            <strong>Merged PRs (@changes.PullRequests.Count)</strong>
+            @if (changes.ComparisonUnavailableReason is { } reason)
+            {
+                <p class="text-muted small my-2">@reason Newness is unknown.</p>
+            }
+            else
+            {
+                <p class="text-muted small my-2">
+                    <strong>@changes.PullRequests.Count(pr => pr.IsNew) new</strong> since
+                    <a href="@($"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{changes.PreviousInsertionId}")"
+                       target="_blank" rel="noopener noreferrer">@changes.PreviousBuildNumber</a>
+                    (VS PR @changes.PreviousInsertionId).
+                </p>
+            }
+            @if (changes.PullRequests.Count == 0)
+            {
+                <p class="text-muted mb-0">No merged PR links were found in this description.</p>
+            }
+            else
+            {
+                <ul class="insertion-pr-list mb-0">
+                    @foreach (var change in changes.PullRequests)
+                    {
+                        <li class="@(change.IsNew ? "insertion-pr-new" : "")">
+                            @if (change.IsNew)
+                            {
+                                <span class="badge bg-success me-1">New</span>
+                            }
+                            <a href="@change.PullRequest.Url" target="_blank" rel="noopener noreferrer">@change.PullRequest.Title</a>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Url { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string BuildNumber { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Tooltip { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<Task<InsertionChanges>> LoadChanges { get; set; }
+
+    private readonly string previewId = $"insertion-preview-{Guid.NewGuid():N}";
+    private InsertionChanges? changes;
+    private string? error;
+    private bool loading;
+
+    private async Task ShowAsync()
+    {
+        if (changes is null && error is null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (loading)
+        {
+            return;
+        }
+
+        loading = true;
+        error = null;
+        try
+        {
+            changes = await LoadChanges();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or OperationCanceledException or Azure.Identity.AuthenticationFailedException)
+        {
+            Logger.LogWarning(ex, "Failed to load merged PRs for {InsertionUrl}", Url);
+            error = $"Could not load or compare merged PRs: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
