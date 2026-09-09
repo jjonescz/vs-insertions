@@ -1155,6 +1155,30 @@ public class RpsParserTests
         Verify(new()
         {
             Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/778420",
+            Threads = """
+            {
+              "comments": [
+                {
+                  "author": {
+                    "displayName": "vsengtratt"
+                  },
+                  "content": "### __Required__ tests have been launched."
+                },
+                {
+                  "author": {
+                    "displayName": "vsengtratt"
+                  },
+                  "content": "#### :x: 3 test stage(s) failed...\n\n| Stage | Help | Error |\n| ----- | ---- | ----- |\n| [Invoke CloudTest](https://example.com) | [Email owner](mailto:example@example.com) | Task failed. |"
+                },
+                {
+                  "author": {
+                    "displayName": "vsengtratt"
+                  },
+                  "content": "#### :x: 1 test case(s) failed...\n\n| Test(s) | Help | Error |\n| ------- | ---- | ----- |\n| [APIs Required Tests (VS PR): ApiCompatTests.ApiCompatTest.ApiReviewEnforcementTest](https://example.com) | [Email owner](mailto:example@example.com) | Assertion failed. |"
+                }
+              ]
+            }
+            """,
             Checks = """
             {
               "configuration": {
@@ -1174,11 +1198,16 @@ public class RpsParserTests
             RequiredTestsStatus:
               Status: Rejected
               Expires: 2026-09-09T06:50:11.3438508+00:00
+              FailedTestCases:
+                - APIs Required Tests (VS PR): ApiCompatTests.ApiCompatTest.ApiReviewEnforcementTest
             Display:
               Short: Build: ?, RequiredTests: ✘, DDRIT: N/A, Speedometer: N/A
               Long:
                 Build: Unknown
                 RequiredTests: Rejected (expires 2026-09-09T06:50:11.3438508+00:00)
+
+                Failed test cases:
+                - APIs Required Tests (VS PR): ApiCompatTests.ApiCompatTest.ApiReviewEnforcementTest
                 DDRIT: Not started
                 Speedometer: Not started
             """);

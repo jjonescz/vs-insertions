@@ -22,7 +22,9 @@ public sealed class RpsParser
 
         rpsSummary.BuildStatus = getBuildStatus(checksJson, "CloudBuild");
         rpsSummary.DesktopValidationStatus = getBuildStatus(checksJson, "Desktop Validation");
-        rpsSummary.RequiredTestsStatus = getBuildStatus(checksJson, "Required Tests");
+        rpsSummary.RequiredTestsStatus = getBuildStatus(checksJson, "Required Tests") is { } requiredTestsStatus
+            ? requiredTestsStatus with { FailedTestCases = getFailedTestCases(threads, "__Required__ tests have been launched") }
+            : null;
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
         rpsSummary.SpeedometerScoped = getRunResults(threads, "We've started Speedometer-Scoped");
         rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer\r");
@@ -155,6 +157,32 @@ public sealed class RpsParser
             }
         }
 
+        static IReadOnlyList<string>? getFailedTestCases(JsonArray threads, string launchText)
+        {
+            var latestThread = threads
+                .LastOrDefault(thread => thread?["comments"]?.AsArray().Any(comment =>
+                    comment?["content"]?.ToString().Contains(launchText, StringComparison.OrdinalIgnoreCase) == true) == true);
+            if (latestThread == null)
+            {
+                return null;
+            }
+
+            var failedTestCases = latestThread["comments"]!.AsArray()
+                .Select(comment => comment?["content"]?.ToString())
+                .Where(content => content?.Contains("test case(s) failed", StringComparison.OrdinalIgnoreCase) == true)
+                .SelectMany(content => Regex.Matches(content!, @"^\|\s*(.+?)\s*\|", RegexOptions.Multiline).Select(match => match.Groups[1].Value.Trim()))
+                .Where(firstCell => !firstCell.StartsWith('-') && !firstCell.Equals("Test(s)", StringComparison.OrdinalIgnoreCase))
+                .Select(firstCell =>
+                {
+                    var link = Regex.Match(firstCell, @"^\[(.*)\]\(.*\)$");
+                    return link.Success ? link.Groups[1].Value : firstCell;
+                })
+                .Distinct()
+                .ToArray();
+
+            return failedTestCases.Length == 0 ? null : failedTestCases;
+        }
+
         static int tryGetCount(string text, string label)
         {
             var match = Regex.Match(text, @$"(\d+) {label}");
@@ -202,7 +230,12 @@ public sealed class RpsParser
     }
 }
 
-public sealed record class BuildStatus(PolicyEvaluationStatus Status, bool IsExpired, DateTimeOffset? Expires, string? OutputPreview);
+public sealed record class BuildStatus(
+    PolicyEvaluationStatus Status,
+    bool IsExpired,
+    DateTimeOffset? Expires,
+    string? OutputPreview,
+    IReadOnlyList<string>? FailedTestCases = null);
 
 public sealed class RpsSummary
 {
@@ -277,6 +310,11 @@ public static class RpsExtensions
         if (status.OutputPreview != null)
         {
             longText += $"\n\nOutput preview:\n{status.OutputPreview}";
+        }
+
+        if (status.FailedTestCases is { Count: > 0 })
+        {
+            longText += $"\n\nFailed test cases:\n- {string.Join("\n- ", status.FailedTestCases)}";
         }
 
         return new(shortText, longText);
