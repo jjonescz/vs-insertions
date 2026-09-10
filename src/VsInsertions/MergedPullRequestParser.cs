@@ -21,7 +21,7 @@ public static partial class MergedPullRequestParser
         foreach (var link in document.QuerySelectorAll("li a[href]"))
         {
             if (!Uri.TryCreate(link.GetAttribute("href"), UriKind.Absolute, out var uri) ||
-                uri.Scheme is not ("https" or "http") || uri.UserInfo.Length != 0)
+                uri.Scheme != Uri.UriSchemeHttps || uri.UserInfo.Length != 0)
             {
                 continue;
             }

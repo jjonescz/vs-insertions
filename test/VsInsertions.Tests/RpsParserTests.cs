@@ -1213,6 +1213,45 @@ public class RpsParserTests
             """);
     }
 
+    [Theory]
+    [InlineData(PolicyEvaluationStatus.Queued)]
+    [InlineData(PolicyEvaluationStatus.Running)]
+    [InlineData(PolicyEvaluationStatus.Approved)]
+    [InlineData(PolicyEvaluationStatus.Broken)]
+    [InlineData(PolicyEvaluationStatus.NotApplicable)]
+    public void RequiredTestsRerunClearsPreviousFailures(PolicyEvaluationStatus status)
+    {
+        const string threads = """
+            {"value": [{
+              "comments": [
+                {"content": "### __Required__ tests have been launched."},
+                {"content": "1 test case(s) failed...\n\n| Test(s) | Error |\n| ------- | ----- |\n| Example.FailingTest | Assertion failed. |"}
+              ]
+            }]}
+            """;
+        var parser = new RpsParser();
+        var summary = new RpsSummary();
+        parser.ParseRpsSummary(threads, checks(PolicyEvaluationStatus.Rejected), summary);
+        Assert.NotNull(summary.RequiredTestsStatus?.FailedTestCases);
+        Assert.Equal("Example.FailingTest", Assert.Single(summary.RequiredTestsStatus.FailedTestCases));
+        Assert.Contains("Failed test cases:", summary.RequiredTestsStatus.Display().Long);
+
+        parser.ParseRpsSummary(threads, checks(status), summary);
+
+        Assert.NotNull(summary.RequiredTestsStatus);
+        Assert.Equal(status, summary.RequiredTestsStatus.Status);
+        Assert.Null(summary.RequiredTestsStatus.FailedTestCases);
+        Assert.DoesNotContain("Failed test cases:", summary.RequiredTestsStatus.Display().Long);
+        Assert.DoesNotContain("Example.FailingTest", summary.RequiredTestsStatus.Display().Long);
+
+        static string checks(PolicyEvaluationStatus status) => $$$"""
+            {"value": [{
+              "configuration": {"settings": {"displayName": "Required Tests"}},
+              "status": "{{{status}}}"
+            }]}
+            """;
+    }
+
     [Fact]
     public void FailedDesktopValidation()
     {

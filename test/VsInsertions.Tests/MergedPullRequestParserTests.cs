@@ -69,6 +69,21 @@ public class MergedPullRequestParserTests
     }
 
     [Theory]
+    [InlineData("http://github.com/dotnet/roslyn/pull/1")]
+    [InlineData("http://dev.azure.com/org/project/_git/repo/pullrequest/1")]
+    [InlineData("http://org.visualstudio.com/project/_git/repo/pullrequest/1")]
+    public void IgnoresHttpLinksButKeepsTheirHttpsEquivalent(string httpUrl)
+    {
+        var httpsUrl = "https" + httpUrl["http".Length..];
+        var prs = MergedPullRequestParser.Parse($"""
+            - [Insecure link]({httpUrl})
+            - [Secure link]({httpsUrl})
+            """);
+
+        Assert.Equal(new MergedPullRequest("Secure link", httpsUrl), Assert.Single(prs));
+    }
+
+    [Theory]
     [InlineData("javascript:alert(1)")]
     [InlineData("data:text/html,test")]
     [InlineData("https://github.com.evil.example/dotnet/roslyn/pull/1")]

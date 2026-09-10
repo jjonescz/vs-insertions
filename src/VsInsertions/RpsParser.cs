@@ -22,9 +22,14 @@ public sealed class RpsParser
 
         rpsSummary.BuildStatus = getBuildStatus(checksJson, "CloudBuild");
         rpsSummary.DesktopValidationStatus = getBuildStatus(checksJson, "Desktop Validation");
-        rpsSummary.RequiredTestsStatus = getBuildStatus(checksJson, "Required Tests") is { } requiredTestsStatus
-            ? requiredTestsStatus with { FailedTestCases = getFailedTestCases(threads, "__Required__ tests have been launched") }
-            : null;
+        rpsSummary.RequiredTestsStatus = getBuildStatus(checksJson, "Required Tests");
+        if (rpsSummary.RequiredTestsStatus is { Status: PolicyEvaluationStatus.Rejected } requiredTestsStatus)
+        {
+            rpsSummary.RequiredTestsStatus = requiredTestsStatus with
+            {
+                FailedTestCases = getFailedTestCases(threads, "__Required__ tests have been launched"),
+            };
+        }
         rpsSummary.Ddrit = getRunResults(threads, "We've started **VS64** Perf DDRITs");
         rpsSummary.SpeedometerScoped = getRunResults(threads, "We've started Speedometer-Scoped");
         rpsSummary.Speedometer = getRunResults(threads, "We've started Speedometer\r");
