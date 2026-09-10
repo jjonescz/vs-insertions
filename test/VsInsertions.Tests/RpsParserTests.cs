@@ -1155,6 +1155,30 @@ public class RpsParserTests
         Verify(new()
         {
             Url = "https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/778420",
+            Threads = """
+            {
+              "comments": [
+                {
+                  "author": {
+                    "displayName": "vsengtratt"
+                  },
+                  "content": "### __Required__ tests have been launched."
+                },
+                {
+                  "author": {
+                    "displayName": "vsengtratt"
+                  },
+                  "content": "#### :x: 3 test stage(s) failed...\n\n| Stage | Help | Error |\n| ----- | ---- | ----- |\n| [Invoke CloudTest](https://example.com) | [Email owner](mailto:example@example.com) | Task failed. |"
+                },
+                {
+                  "author": {
+                    "displayName": "vsengtratt"
+                  },
+                  "content": "#### :x: 1 test case(s) failed...\n\n| Test(s) | Help | Error |\n| ------- | ---- | ----- |\n| [APIs Required Tests (VS PR): ApiCompatTests.ApiCompatTest.ApiReviewEnforcementTest](https://example.com) | [Email owner](mailto:example@example.com) | Assertion failed. |"
+                }
+              ]
+            }
+            """,
             Checks = """
             {
               "configuration": {
@@ -1174,14 +1198,58 @@ public class RpsParserTests
             RequiredTestsStatus:
               Status: Rejected
               Expires: 2026-09-09T06:50:11.3438508+00:00
+              FailedTestCases:
+                - APIs Required Tests (VS PR): ApiCompatTests.ApiCompatTest.ApiReviewEnforcementTest
             Display:
               Short: Build: ?, RequiredTests: ✘, DDRIT: N/A, Speedometer: N/A
               Long:
                 Build: Unknown
                 RequiredTests: Rejected (expires 2026-09-09T06:50:11.3438508+00:00)
+
+                Failed test cases:
+                - APIs Required Tests (VS PR): ApiCompatTests.ApiCompatTest.ApiReviewEnforcementTest
                 DDRIT: Not started
                 Speedometer: Not started
             """);
+    }
+
+    [Theory]
+    [InlineData(PolicyEvaluationStatus.Queued)]
+    [InlineData(PolicyEvaluationStatus.Running)]
+    [InlineData(PolicyEvaluationStatus.Approved)]
+    [InlineData(PolicyEvaluationStatus.Broken)]
+    [InlineData(PolicyEvaluationStatus.NotApplicable)]
+    public void RequiredTestsRerunClearsPreviousFailures(PolicyEvaluationStatus status)
+    {
+        const string threads = """
+            {"value": [{
+              "comments": [
+                {"content": "### __Required__ tests have been launched."},
+                {"content": "1 test case(s) failed...\n\n| Test(s) | Error |\n| ------- | ----- |\n| Example.FailingTest | Assertion failed. |"}
+              ]
+            }]}
+            """;
+        var parser = new RpsParser();
+        var summary = new RpsSummary();
+        parser.ParseRpsSummary(threads, checks(PolicyEvaluationStatus.Rejected), summary);
+        Assert.NotNull(summary.RequiredTestsStatus?.FailedTestCases);
+        Assert.Equal("Example.FailingTest", Assert.Single(summary.RequiredTestsStatus.FailedTestCases));
+        Assert.Contains("Failed test cases:", summary.RequiredTestsStatus.Display().Long);
+
+        parser.ParseRpsSummary(threads, checks(status), summary);
+
+        Assert.NotNull(summary.RequiredTestsStatus);
+        Assert.Equal(status, summary.RequiredTestsStatus.Status);
+        Assert.Null(summary.RequiredTestsStatus.FailedTestCases);
+        Assert.DoesNotContain("Failed test cases:", summary.RequiredTestsStatus.Display().Long);
+        Assert.DoesNotContain("Example.FailingTest", summary.RequiredTestsStatus.Display().Long);
+
+        static string checks(PolicyEvaluationStatus status) => $$$"""
+            {"value": [{
+              "configuration": {"settings": {"displayName": "Required Tests"}},
+              "status": "{{{status}}}"
+            }]}
+            """;
     }
 
     [Fact]

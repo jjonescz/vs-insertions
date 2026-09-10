@@ -1,7 +1,9 @@
 ﻿@inject IHttpContextAccessor ContextAccessor
+@inject IJSRuntime JSRuntime
+@inject ILogger<NavMenu> Logger
 
 <div class="nav-wrapper">
-    <input type="checkbox" id="nav-toggle" class="nav-toggle" checked="@IsCollapsed" />
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" @bind="isCollapsed" @bind:after="SaveCollapsedAsync" />
     <div class="nav-sidebar">
         <div class="top-row ps-3 navbar navbar-dark">
             <div class="container-fluid">
@@ -32,6 +34,36 @@
 </div>
 
 @code {
-    private bool IsCollapsed =>
-        ContextAccessor.HttpContext?.Request.Cookies["nav-collapsed"] == "1";
+    private bool isCollapsed;
+
+    protected override void OnInitialized() =>
+        isCollapsed = ContextAccessor.HttpContext?.Request.Cookies["nav-collapsed"] == "1";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                isCollapsed = await JSRuntime.InvokeAsync<string?>("getCookie", "nav-collapsed") == "1";
+                StateHasChanged();
+            }
+            catch (JSException ex)
+            {
+                Logger.LogWarning(ex, "Failed to read the navigation collapsed state");
+            }
+        }
+    }
+
+    private async Task SaveCollapsedAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("setCookie", "nav-collapsed", isCollapsed ? "1" : "0");
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Failed to save the navigation collapsed state");
+        }
+    }
 }

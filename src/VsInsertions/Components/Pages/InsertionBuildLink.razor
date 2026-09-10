@@ -1,0 +1,200 @@
+@using System.Text.Json
+@inject ILogger<InsertionBuildLink> Logger
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div class="insertion-build-link" @ref="element" data-preview-loaded="@(changes is not null ? "true" : "false")">
+    <a href="@Url" aria-describedby="@previewId" target="_blank" rel="noopener noreferrer">@BuildNumber</a>
+    <div id="@previewId" class="insertion-preview" role="region" aria-label="Merged pull requests">
+        <div class="insertion-preview-metadata">@Tooltip</div>
+        <hr class="my-2" />
+        @if (error is not null)
+        {
+            <div class="text-danger" role="alert">@error</div>
+            <button class="btn btn-sm btn-outline-primary mt-2" @onclick="LoadAsync">Retry</button>
+        }
+        else if (changes is null)
+        {
+            <div role="status">Loading merged PRs...</div>
+        }
+        else
+        {
+            <strong>Merged PRs (@changes.PullRequests.Count)</strong>
+            <p class="text-muted small my-2">
+                @if (changes.ComparisonUnavailableReason is { } reason)
+                {
+                    <strong>@reason Newness is unknown.</strong>
+                }
+                else
+                {
+                    <text>
+                        <strong>@changes.PullRequests.Count(pr => pr.IsNew) new</strong> since
+                        <a href="@($"https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequest/{changes.PreviousInsertionId}")"
+                            target="_blank" rel="noopener noreferrer">@changes.PreviousBuildNumber</a>
+                        (VS PR @changes.PreviousInsertionId).
+                    </text>
+                }
+                Compare with@(" ")
+                @if (changes.PreviousCompareUrl is { } previousCompareUrl)
+                {
+                    <a href="@previousCompareUrl" target="_blank" rel="noopener noreferrer"
+                    title="Compare the previous insertion attempt's commit with this build">previous</a>
+                }
+                else
+                {
+                    <span class="text-muted" title="The previous insertion or its GitHub commit information is unavailable">previous</span>
+                }
+                @(" · ")
+                @if (changes.InsertedCompareUrl is { } insertedCompareUrl)
+                {
+                    <a href="@insertedCompareUrl" target="_blank" rel="noopener noreferrer"
+                    title="Compare the already-inserted 'from' commit recorded in this description with this build">inserted</a>
+                }
+                else
+                {
+                    <span class="text-muted" title="The description does not identify the inserted baseline and GitHub commit information">inserted</span>
+                }
+            </p>
+            @if (changes.PullRequests.Count == 0)
+            {
+                <p class="text-muted mb-0">No merged PR links were found in this description.</p>
+            }
+            else
+            {
+                <ul class="insertion-pr-list mb-0">
+                    @foreach (var change in changes.PullRequests)
+                    {
+                        <li class="@(change.IsNew ? "insertion-pr-new" : "")">
+                            @if (change.IsNew)
+                            {
+                                <span class="badge bg-success me-1">New</span>
+                            }
+                            <a href="@change.PullRequest.Url" target="_blank" rel="noopener noreferrer">@change.PullRequest.Title</a>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Url { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string BuildNumber { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Tooltip { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<CancellationToken, Task<InsertionChanges>> LoadChanges { get; set; }
+
+    private readonly string previewId = $"insertion-preview-{Guid.NewGuid():N}";
+    private ElementReference element;
+    private DotNetObjectReference<InsertionBuildLink>? reference;
+    private InsertionChanges? changes;
+    private string? error;
+    private CancellationTokenSource? loadingRequest;
+    private bool disposed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            reference = DotNetObjectReference.Create(this);
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("insertionPreview.register", element, reference);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Initialization can race with the browser disconnecting.
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task SetPreviewActive(bool active)
+    {
+        if (!active)
+        {
+            CancelLoading();
+        }
+        else if (!disposed && changes is null && error is null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (disposed || loadingRequest is not null)
+        {
+            return;
+        }
+
+        using var request = new CancellationTokenSource();
+        loadingRequest = request;
+        error = null;
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+            var result = await LoadChanges(request.Token);
+            request.Token.ThrowIfCancellationRequested();
+            changes = result;
+        }
+        catch (OperationCanceledException) when (request.IsCancellationRequested)
+        {
+            // Leaving or dismissing the preview is not a loading failure.
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or OperationCanceledException or Azure.Identity.AuthenticationFailedException)
+        {
+            if (!request.IsCancellationRequested)
+            {
+                Logger.LogWarning(ex, "Failed to load merged PRs for {InsertionUrl}", Url);
+                error = $"Could not load or compare merged PRs: {ex.Message}";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(loadingRequest, request))
+            {
+                loadingRequest = null;
+            }
+            if (!disposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private void CancelLoading()
+    {
+        var request = loadingRequest;
+        loadingRequest = null;
+        request?.Cancel();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        CancelLoading();
+        try
+        {
+            if (reference is not null)
+            {
+                await JSRuntime.InvokeVoidAsync("insertionPreview.unregister", previewId);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser cannot be notified after its circuit disconnects.
+        }
+        finally
+        {
+            reference?.Dispose();
+        }
+    }
+}
