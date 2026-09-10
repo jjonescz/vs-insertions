@@ -210,7 +210,7 @@ else
                     <td>
                         <InsertionBuildLink Url="@insertion.Url" BuildNumber="@insertion.BuildNumber"
                                             Tooltip="@insertion.BuildNumberTooltip"
-                                            LoadChanges="@(() => changesService.GetChangesAsync(int.Parse(insertion.PullRequestId)))" />
+                                            LoadChanges="@(token => changesService.GetChangesAsync(int.Parse(insertion.PullRequestId), token))" />
                     </td>
 
                     @if (editMode)

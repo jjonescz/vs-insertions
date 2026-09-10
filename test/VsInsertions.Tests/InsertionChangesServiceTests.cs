@@ -260,6 +260,134 @@ public class InsertionChangesServiceTests
         Assert.Single(handler.Requests, uri => uri.AbsolutePath.EndsWith("/50"));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task CancelsEachHttpStageAndAllowsRetry(int cancelAtRequest)
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var cancelRequest = true;
+        CancellationToken httpToken = default;
+        using var handler = new StubHandler(async (uri, token) =>
+        {
+            calls++;
+            if (cancelRequest && calls == cancelAtRequest)
+            {
+                httpToken = token;
+                entered.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            return uri.AbsolutePath.Split('/').Last() switch
+            {
+                "50" => Json(Details(50, CurrentDescription)),
+                "40" => Json(Details(40, PreviousDescription)),
+                _ => ListForCreator(uri, [Details(40)]),
+            };
+        });
+        using var client = new HttpClient(handler);
+        var service = new InsertionChangesService(client, new TitleParser());
+        using var cancellation = new CancellationTokenSource();
+
+        var pending = service.GetChangesAsync(50, cancellation.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.True(httpToken.IsCancellationRequested);
+        Assert.Equal(cancelAtRequest, calls);
+
+        cancelRequest = false;
+        var changes = await service.GetChangesAsync(50);
+        Assert.Equal(40, changes.PreviousInsertionId);
+        Assert.True(changes.PullRequests[1].IsNew);
+        var successfulCallCount = calls;
+        Assert.Same(changes, await service.GetChangesAsync(50));
+        Assert.Equal(successfulCallCount, calls);
+    }
+
+    [Fact]
+    public async Task CancelsPaginatedSearchWithoutFetchingMorePages()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unrelated = Enumerable.Range(1, 100)
+            .Select(_ => Details(49, title: "Razor 'main/20260909.49' Insertion into main")).ToArray();
+        using var handler = new StubHandler(async (uri, token) =>
+        {
+            if (uri.AbsolutePath.EndsWith("/50"))
+            {
+                return Json(Details(50, CurrentDescription));
+            }
+            if (HttpUtility.ParseQueryString(uri.Query)["$skip"] == "100")
+            {
+                entered.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            return ListForCreator(uri, unrelated);
+        });
+        using var client = new HttpClient(handler);
+        using var cancellation = new CancellationTokenSource();
+        var service = new InsertionChangesService(client, new TitleParser());
+
+        var pending = service.GetChangesAsync(50, cancellation.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreCanceledRequestDoesNoWorkEvenWhenCached(bool cached)
+    {
+        using var handler = new StubHandler(uri => uri.AbsolutePath.EndsWith("/50")
+            ? Json(Details(50, CurrentDescription)) : ListForCreator(uri, []));
+        using var client = new HttpClient(handler);
+        var service = new InsertionChangesService(client, new TitleParser());
+        if (cached)
+        {
+            await service.GetChangesAsync(50);
+        }
+        var calls = handler.Requests.Count;
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetChangesAsync(50, cancellation.Token));
+        Assert.Equal(calls, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task OneCanceledPreviewDoesNotCancelAnother()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new StubHandler(async (uri, token) =>
+        {
+            if (uri.AbsolutePath.EndsWith("/50"))
+            {
+                entered.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            return uri.AbsolutePath.EndsWith("/51")
+                ? Json(Details(51, CurrentDescription)) : ListForCreator(uri, []);
+        });
+        using var client = new HttpClient(handler);
+        var service = new InsertionChangesService(client, new TitleParser());
+        using var cancellation = new CancellationTokenSource();
+        var canceled = service.GetChangesAsync(50, cancellation.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var other = await service.GetChangesAsync(51);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceled);
+        Assert.Equal(2, other.PullRequests.Count);
+        Assert.Same(other, await service.GetChangesAsync(51));
+    }
+
     [Fact]
     public async Task MalformedListIsNotTreatedAsNoPreviousInsertion()
     {
@@ -292,15 +420,20 @@ public class InsertionChangesServiceTests
         Content = JsonContent.Create(node),
     };
 
-    private sealed class StubHandler(Func<Uri, HttpResponseMessage> respond) : HttpMessageHandler
+    private sealed class StubHandler(Func<Uri, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler
     {
+        public StubHandler(Func<Uri, HttpResponseMessage> respond)
+            : this((uri, _) => Task.FromResult(respond(uri)))
+        {
+        }
+
         public List<Uri> Requests { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var uri = request.RequestUri!;
             Requests.Add(uri);
-            return Task.FromResult(respond(uri));
+            return respond(uri, cancellationToken);
         }
     }
 }

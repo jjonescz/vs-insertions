@@ -28,14 +28,15 @@ public sealed class InsertionChangesService(HttpClient client, TitleParser title
     private readonly Dictionary<int, InsertionDetails> detailsCache = new();
     private readonly Dictionary<int, InsertionChanges> changesCache = new();
 
-    public async Task<InsertionChanges> GetChangesAsync(int pullRequestId)
+    public async Task<InsertionChanges> GetChangesAsync(int pullRequestId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (changesCache.TryGetValue(pullRequestId, out var cached))
         {
             return cached;
         }
 
-        var current = await GetDetailsAsync(pullRequestId);
+        var current = await GetDetailsAsync(pullRequestId, cancellationToken);
         InsertionDetails? previous = null;
         string? unavailableReason = null;
         if (current.Title is not { IsPr: false })
@@ -44,7 +45,7 @@ public sealed class InsertionChangesService(HttpClient client, TitleParser title
         }
         else
         {
-            previous = await FindPreviousAsync(current);
+            previous = await FindPreviousAsync(current, cancellationToken);
             if (previous is null)
             {
                 unavailableReason = "No previous insertion was found for this repo, source branch and target branch.";
@@ -52,7 +53,7 @@ public sealed class InsertionChangesService(HttpClient client, TitleParser title
             else
             {
                 // The list endpoint truncates descriptions to 400 characters.
-                previous = await GetDetailsAsync(previous.Id);
+                previous = await GetDetailsAsync(previous.Id, cancellationToken);
                 if (previous.Description is null)
                 {
                     unavailableReason = "The previous insertion has no description to compare.";
@@ -76,31 +77,35 @@ public sealed class InsertionChangesService(HttpClient client, TitleParser title
             unavailableReason,
             previousCompareUrl,
             currentCommits?.InsertedCommit is { } insertedCommit ? currentCommits.CompareUrl(insertedCommit) : null);
+        cancellationToken.ThrowIfCancellationRequested();
         changesCache[pullRequestId] = changes;
         return changes;
     }
 
-    private async Task<InsertionDetails> GetDetailsAsync(int id)
+    private async Task<InsertionDetails> GetDetailsAsync(int id, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (detailsCache.TryGetValue(id, out var cached))
         {
             return cached;
         }
 
-        var node = await client.GetFromJsonAsync<JsonObject>($"{ApiUrl}/{id}?api-version=7.1")
+        var node = await client.GetFromJsonAsync<JsonObject>($"{ApiUrl}/{id}?api-version=7.1", cancellationToken)
             ?? throw new JsonException("Azure DevOps returned an empty pull request response.");
+        cancellationToken.ThrowIfCancellationRequested();
         var details = ParseDetails(node);
         detailsCache[id] = details;
         return details;
     }
 
-    private async Task<InsertionDetails?> FindPreviousAsync(InsertionDetails current)
+    private async Task<InsertionDetails?> FindPreviousAsync(InsertionDetails current, CancellationToken cancellationToken)
     {
         InsertionDetails? previous = null;
         foreach (var creatorId in InsertionCreatorIds)
         {
             for (var skip = 0; ; skip += PageSize)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // Search independently of the dashboard's filters and loaded pages.
                 var url = $"{ApiUrl}?api-version=7.1&searchCriteria.status=all" +
                     $"&searchCriteria.creatorId={creatorId}" +
@@ -108,7 +113,8 @@ public sealed class InsertionChangesService(HttpClient client, TitleParser title
                     $"&searchCriteria.maxTime={Uri.EscapeDataString(current.Created.ToString("O", CultureInfo.InvariantCulture))}" +
                     "&searchCriteria.queryTimeRangeType=created" +
                     $"&$top={PageSize}&$skip={skip}";
-                var response = await client.GetFromJsonAsync<JsonObject>(url);
+                var response = await client.GetFromJsonAsync<JsonObject>(url, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 var entries = response?["value"]?.AsArray()
                     ?? throw new JsonException("Azure DevOps returned no pull request list.");
                 var candidates = entries.Select(node => ParseDetails(node
