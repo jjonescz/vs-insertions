@@ -105,6 +105,29 @@ public sealed class MaestroConfigService(ILogger<MaestroConfigService> logger)
     }
 
     /// <summary>
+    /// Resolves a subscription's source default channel, retaining disabled mappings when
+    /// no enabled mapping exists. Validation channels are a fallback for the exact channel.
+    /// </summary>
+    public static DefaultChannel? ResolveDefaultChannel(
+        IReadOnlyList<DefaultChannel> defaultChannels, ArcadeSubscription subscription)
+    {
+        if (string.IsNullOrEmpty(subscription.SourceRepository) || string.IsNullOrEmpty(subscription.Channel))
+            return null;
+
+        return defaultChannels
+            .Where(dc =>
+                (string.Equals(dc.Channel, subscription.Channel, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(dc.Channel, subscription.Channel + " - Validation", StringComparison.OrdinalIgnoreCase))
+                && string.Equals(
+                    NormalizeRepoName(dc.Repository ?? ""),
+                    subscription.SourceRepoShort,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(dc => dc.Enabled)
+            .ThenBy(dc => string.Equals(dc.Channel, subscription.Channel, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
     /// Converts full GitHub URLs to short form (e.g., "https://github.com/dotnet/roslyn" → "dotnet/roslyn").
     /// </summary>
     public static string NormalizeRepoName(string repo)
