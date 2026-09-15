@@ -89,6 +89,110 @@ public class MaestroConfigServiceTests
     }
 
     [Fact]
+    public void ParseDisabledDefaultChannel()
+    {
+        var yaml = """
+            - Repository: https://github.com/dotnet/roslyn
+              Branch: main
+              Channel: .NET Core Tooling Dev
+              Enabled: false
+            """;
+
+        var channel = Assert.Single(_deserializer.Deserialize<List<DefaultChannel>>(yaml));
+
+        Assert.False(channel.Enabled);
+        Assert.Equal("main", channel.Branch);
+    }
+
+    [Theory]
+    [InlineData(true, true, "main", true)]
+    [InlineData(true, false, "main", true)]
+    [InlineData(false, true, "validation", true)]
+    [InlineData(false, false, "main", false)]
+    [InlineData(true, null, "main", true)]
+    [InlineData(false, null, "main", false)]
+    [InlineData(null, true, "validation", true)]
+    [InlineData(null, false, "validation", false)]
+    [InlineData(null, null, null, null)]
+    public void ResolveDefaultChannel_PrefersEnabledMappingsThenExactChannel(
+        bool? enabled, bool? validationEnabled, string? expectedBranch, bool? expectedEnabled)
+    {
+        var sub = new ArcadeSubscription
+        {
+            SourceRepository = "https://github.com/dotnet/roslyn",
+            Channel = ".NET 11 Dev",
+        };
+        var channels = new List<DefaultChannel>
+        {
+            new() { Repository = sub.SourceRepository, Channel = "Unrelated", Branch = "unrelated" },
+            new() { Repository = "https://github.com/dotnet/razor", Channel = sub.Channel, Branch = "other-repo" },
+        };
+        if (validationEnabled is { } validation)
+        {
+            channels.Add(new DefaultChannel
+            {
+                Repository = "DOTNET/ROSLYN",
+                Channel = ".net 11 dev - validation",
+                Branch = "validation",
+                Enabled = validation,
+            });
+        }
+        if (enabled is { } exact)
+        {
+            channels.Add(new DefaultChannel
+            {
+                Repository = "https://github.com/DOTNET/ROSLYN/",
+                Channel = ".net 11 dev",
+                Branch = "main",
+                Enabled = exact,
+            });
+        }
+
+        var channel = MaestroConfigService.ResolveDefaultChannel(channels, sub);
+
+        Assert.Equal(expectedBranch, channel?.Branch);
+        Assert.Equal(expectedEnabled, channel?.Enabled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ResolveDefaultChannel_PrefersEnabledBranchRegardlessOfOrder(bool enabledFirst)
+    {
+        var sub = new ArcadeSubscription
+        {
+            SourceRepository = "https://github.com/dotnet/roslyn",
+            Channel = ".NET 11 Dev",
+        };
+        var enabled = new DefaultChannel
+        {
+            Repository = sub.SourceRepository, Channel = sub.Channel, Branch = "main", Enabled = true,
+        };
+        var disabled = new DefaultChannel
+        {
+            Repository = sub.SourceRepository, Channel = sub.Channel, Branch = "old", Enabled = false,
+        };
+
+        var channel = MaestroConfigService.ResolveDefaultChannel(
+            enabledFirst ? [enabled, disabled] : [disabled, enabled], sub);
+
+        Assert.Same(enabled, channel);
+    }
+
+    [Theory]
+    [InlineData(null, ".NET 11 Dev")]
+    [InlineData("", ".NET 11 Dev")]
+    [InlineData("https://github.com/dotnet/roslyn", null)]
+    [InlineData("https://github.com/dotnet/roslyn", "")]
+    public void ResolveDefaultChannel_MissingSourceOrChannel(string? sourceRepository, string? channel)
+    {
+        var sub = new ArcadeSubscription { SourceRepository = sourceRepository, Channel = channel };
+        DefaultChannel[] channels = [new() { Repository = sourceRepository, Channel = channel }];
+
+        Assert.Null(MaestroConfigService.ResolveDefaultChannel(channels, sub));
+    }
+
+    [Fact]
     public void ParseDisabledSourceSubscription()
     {
         var yaml = """

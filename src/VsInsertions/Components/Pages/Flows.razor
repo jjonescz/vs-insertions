@@ -516,7 +516,7 @@
 
         // Resolve source branches and group by target branch to fetch one manifest per branch.
         var subWithBranch = subs
-            .Select(s => (Sub: s, SourceBranch: ResolveSourceBranch(s)))
+            .Select(s => (Sub: s, SourceBranch: ResolveDefaultChannel(s) is { Enabled: true } dc ? dc.Branch : null))
             .Where(x => !string.IsNullOrEmpty(x.SourceBranch))
             .ToList();
 
@@ -932,31 +932,8 @@
             .ToList();
     }
 
-    /// <summary>
-    /// Resolves the source branch for a subscription by looking up the default channel
-    /// that matches the subscription's source repository and channel.
-    /// </summary>
-    private string? ResolveSourceBranch(ArcadeSubscription sub)
-    {
-        if (config is null || string.IsNullOrEmpty(sub.SourceRepository) || string.IsNullOrEmpty(sub.Channel))
-            return null;
-
-        var dc = FindDefaultChannel(sub.SourceRepoShort, sub.Channel)
-              ?? FindDefaultChannel(sub.SourceRepoShort, sub.Channel + " - Validation");
-
-        return dc?.Branch;
-    }
-
-    private DefaultChannel? FindDefaultChannel(string sourceRepoShort, string channel)
-    {
-        return config?.DefaultChannels.FirstOrDefault(dc =>
-            dc.Enabled
-            && string.Equals(dc.Channel, channel, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(
-                MaestroConfigService.NormalizeRepoName(dc.Repository ?? ""),
-                sourceRepoShort,
-                StringComparison.OrdinalIgnoreCase));
-    }
+    private DefaultChannel? ResolveDefaultChannel(ArcadeSubscription sub) =>
+        config is null ? null : MaestroConfigService.ResolveDefaultChannel(config.DefaultChannels, sub);
 
     // === Unified flow rows ===
 
@@ -990,12 +967,14 @@
                 matched = closedMatch;
             }
 
+            var defaultChannel = ResolveDefaultChannel(sub);
             rows.Add(new UnifiedFlowRow
             {
                 OtherRepo = sub.SourceRepoShort,
                 IsIncoming = true,
                 Subscription = sub,
-                SourceBranch = ResolveSourceBranch(sub),
+                DefaultChannel = defaultChannel,
+                SourceBranch = defaultChannel?.Branch,
                 Prs = matched,
             });
         }
@@ -1022,12 +1001,14 @@
                 matched = closedMatch;
             }
 
+            var defaultChannel = ResolveDefaultChannel(sub);
             rows.Add(new UnifiedFlowRow
             {
                 OtherRepo = sub.TargetRepoShort,
                 IsIncoming = false,
                 Subscription = sub,
-                SourceBranch = ResolveSourceBranch(sub),
+                DefaultChannel = defaultChannel,
+                SourceBranch = defaultChannel?.Branch,
                 Prs = matched,
             });
         }

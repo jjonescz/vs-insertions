@@ -5,8 +5,12 @@ public sealed class UnifiedFlowRow
     public required string OtherRepo { get; init; }
     public required bool IsIncoming { get; init; }
     public ArcadeSubscription? Subscription { get; init; }
+    public DefaultChannel? DefaultChannel { get; init; }
     public string? SourceBranch { get; init; }
     public List<FlowPr> Prs { get; init; } = [];
+
+    /// <summary>Whether automatic flow is enabled by both the subscription and its source default channel.</summary>
+    public bool IsActive => Subscription?.IsActive != false && DefaultChannel?.Enabled != false;
 
     /// <summary>Whether this row represents a same-repo branch flow (no subscription).</summary>
     public bool IsSameRepo { get; init; }

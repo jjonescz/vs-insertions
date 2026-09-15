@@ -48,7 +48,7 @@ else
                 var outCount = group.Count(r => !r.IsIncoming);
                 var circularCount = group.Count(r => IsCircular(r));
                 var prCount = group.Sum(r => r.Prs.Count);
-                var disabledCount = group.Count(r => r.Subscription is { IsActive: false });
+                var disabledCount = group.Count(r => !r.IsActive);
                 var dirSymbol = circularCount == group.Count() ? "⇄" : (inCount > 0 && outCount > 0) ? "↔" : (inCount > 0 ? "←" : "→");
                 var groupCollapseKey = CurrentRepo + "::" + group.Key;
                 var isGroupCollapsed = CollapsedGroups.Contains(groupCollapseKey);
@@ -79,11 +79,12 @@ else
                 {
                     var primaryPr = row.Prs.FirstOrDefault();
                     var isExpanded = ExpandedRows.Contains(row.RowKey);
-                    var isEnabled = row.Subscription?.IsActive ?? true;
-                    var enabledSuffix = row.Subscription switch
+                    var isEnabled = row.IsActive;
+                    var enabledSuffix = row switch
                     {
-                        { Enabled: false } => " (disabled)",
-                        { IsFrequencyNone: true } => " (frequency: none — effectively disabled)",
+                        { Subscription.Enabled: false } => " (disabled)",
+                        { Subscription.IsFrequencyNone: true } => " (frequency: none — effectively disabled)",
+                        { DefaultChannel.Enabled: false } => " (default channel disabled — effectively disabled)",
                         _ => "",
                     };
                     var stuck = IsStuck(row, out var overdueTime, out var stuckMessage);
@@ -314,6 +315,10 @@ else
                                     @if (row.Subscription?.Id != null)
                                     {
                                         <strong>Subscription ID:</strong>@(" ")<a href="https://maestro.dot.net/subscriptions?search=@row.Subscription.Id&showDisabled=True" target="_blank" rel="noopener noreferrer">@row.Subscription.Id</a><br/>
+                                    }
+                                    @if (row.DefaultChannel is { Enabled: false } defaultChannel)
+                                    {
+                                        <strong>Default channel:</strong>@(" ")<span class="text-muted">@defaultChannel.Channel (disabled)</span><br/>
                                     }
                                     @if (row.ManifestCommitSha != null)
                                     {
@@ -609,6 +614,7 @@ else
     {
         var parts = new List<string> { "Click to expand/collapse details" };
         if (row.Subscription is { } sub) parts.Add($"Frequency: {sub.UpdateFrequencyDisplay}");
+        if (row.DefaultChannel is { Enabled: false }) parts.Add("Default channel disabled");
         return string.Join("\n", parts);
     }
 
@@ -681,7 +687,7 @@ else
         overdue = default;
         stuckMessage = "";
 
-        var hasSubscription = row.Subscription is { Enabled: true };
+        var hasSubscription = row.Subscription != null && row.IsActive;
         var threshold = hasSubscription ? GetFrequencyThreshold(row.Subscription!.UpdateFrequency) : null;
 
         // Check if there's an open PR that's been open for too long.
