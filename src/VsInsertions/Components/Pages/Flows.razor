@@ -1063,13 +1063,13 @@
             }
         }
 
-        // Apply cached source manifest check results.
+        // Apply cached source manifest check results only to active flows.
         var manifestResults = FlowsState.ManifestCheckResults;
         if (manifestResults.Count > 0)
         {
             foreach (var row in rows)
             {
-                if (row.Subscription is null || string.IsNullOrEmpty(row.SourceBranch))
+                if (!row.IsActive || row.Subscription is null || string.IsNullOrEmpty(row.SourceBranch))
                     continue;
                 var key = $"{row.Subscription.SourceRepoShort}|{row.SourceBranch}";
                 if (manifestResults.TryGetValue(key, out var result))
